@@ -1,0 +1,11 @@
+{
+  "patch": {
+    "notes": "Refresh the website."
+  },
+  "items": [
+    {"kind": "heading", "patch": {"title": "Design"}},
+    {"kind": "todo", "patch": {"title": "Review the landing page"}},
+    {"kind": "heading", "patch": {"title": "Build"}},
+    {"kind": "todo", "patch": {"title": "Implement the approved design"}}
+  ]
+}

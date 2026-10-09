@@ -1,0 +1,4 @@
+/things
+/dist/
+*.test
+.DS_Store

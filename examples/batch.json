@@ -1,0 +1,7 @@
+{
+  "operation_key": "example-capture",
+  "actions": [
+    {"action": "create_todo", "patch": {"title": "Review the draft", "when": "tomorrow"}},
+    {"action": "create_todo", "patch": {"title": "Prepare meeting notes", "notes": "First line.\nSecond line."}}
+  ]
+}

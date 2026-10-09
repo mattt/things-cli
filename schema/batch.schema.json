@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Typed sequential mutations. Omitted patch fields are preserved; null clears supported fields. The entire plan is validated before dispatch. No atomicity or exactly-once delivery is promised.",
+  "properties": {
+    "actions": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "create_todo",
+              "create_project",
+              "update",
+              "update_project",
+              "set_status"
+            ],
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "todo",
+                    "heading"
+                  ],
+                  "type": "string"
+                },
+                "patch": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "add_tags": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "area": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "checklist": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "status": {
+                            "enum": [
+                              "incomplete",
+                              "completed",
+                              "canceled"
+                            ],
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "title"
+                        ],
+                        "type": "object"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "deadline": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "heading": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "project": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "reminder": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "incomplete",
+                        "completed",
+                        "canceled"
+                      ],
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "tags": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "null",
+                        "array"
+                      ]
+                    },
+                    "title": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "when": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "kind",
+                "patch"
+              ],
+              "type": "object"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "operation_key": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "patch": {
+            "additionalProperties": false,
+            "properties": {
+              "add_tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "area": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "checklist": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "incomplete",
+                        "completed",
+                        "canceled"
+                      ],
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "deadline": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "heading": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "notes": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "project": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "reminder": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "incomplete",
+                  "completed",
+                  "canceled"
+                ],
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "title": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "when": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "action",
+          "patch"
+        ],
+        "type": "object"
+      },
+      "maxItems": 250,
+      "minItems": 1,
+      "type": [
+        "null",
+        "array"
+      ]
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "operation_key": {
+      "maxLength": 256,
+      "type": "string"
+    }
+  },
+  "required": [
+    "actions"
+  ],
+  "title": "Things CLI batch plan",
+  "type": "object"
+}

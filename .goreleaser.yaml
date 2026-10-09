@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+
+version: 2
+
+project_name: things
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - binary: things
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/mattt/things-cli/internal/version.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+
+brews:
+  - repository:
+      owner: mattt
+      name: homebrew-tap
+      token: "{{ .Env.GH_PAT }}"
+    directory: Formula
+    homepage: https://github.com/mattt/things-cli
+    description: Read and manage Things 3 with a CLI and MCP server
+    license: MIT
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/things version")
