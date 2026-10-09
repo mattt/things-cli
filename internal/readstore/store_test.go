@@ -3,6 +3,7 @@ package readstore
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -147,5 +148,21 @@ func TestWriteDatabaseSelectionAndIdentity(t *testing.T) {
 	second, err = (Lazy{Path: active}).Snapshot(context.Background())
 	if err != nil || first.Database == second.Database {
 		t.Fatal("replacement retained identity", err)
+	}
+}
+
+func TestOpenVersionRange(t *testing.T) {
+	for v, ok := range map[int]bool{21: false, 22: true, 29: true, 30: false} {
+		db, path := testutil.Database(t)
+		testutil.Exec(t, db, "UPDATE Meta SET value=? WHERE key='databaseVersion'",
+			fmt.Sprintf(`<?xml version="1.0"?><plist><integer>%d</integer></plist>`, v))
+
+		s, err := Open(context.Background(), path)
+		if ok != (err == nil) {
+			t.Fatalf("version %d: accepted=%v, want %v (%v)", v, err == nil, ok, err)
+		}
+		if err == nil {
+			s.Close()
+		}
 	}
 }

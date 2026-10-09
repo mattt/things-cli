@@ -37,7 +37,7 @@ things version
 things doctor
 ```
 
-The adapter supports Things database versions 22 through 24.
+The adapter supports Things database versions 22 through 29.
 A newer version or missing required field returns a capability error.
 If several local libraries exist, choose one explicitly:
 

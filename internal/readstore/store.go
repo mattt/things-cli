@@ -82,8 +82,8 @@ func (s *Store) probe(ctx context.Context) error {
 		err = xml.Unmarshal([]byte(raw), &p)
 		v = p.Integer
 	}
-	if err != nil || v < 22 || v > 24 {
-		return domain.E("schema_unsupported", fmt.Sprintf("Things database version %d is unsupported; this adapter supports versions 22 through 24.", v), 5)
+	if err != nil || v < 22 || v > 29 {
+		return domain.E("schema_unsupported", fmt.Sprintf("Things database version %d is unsupported; this adapter supports versions 22 through 29.", v), 5)
 	}
 
 	required := map[string][]string{
