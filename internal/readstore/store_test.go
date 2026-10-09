@@ -166,3 +166,20 @@ func TestOpenVersionRange(t *testing.T) {
 		}
 	}
 }
+
+func TestHost(t *testing.T) {
+	for _, c := range []struct {
+		paths      []string
+		app        string
+		disclaimed bool
+	}{
+		{[]string{"/bin/zsh", "/Applications/Zed.app/Contents/MacOS/zed"}, "Zed", false},
+		{[]string{"/opt/homebrew/bin/uvx", "/Applications/Claude.app/Contents/Helpers/disclaimer", "/Applications/Claude.app/Contents/MacOS/Claude"}, "Claude", true},
+		{[]string{"/usr/sbin/sshd"}, "", false},
+	} {
+		app, disclaimed := host(c.paths)
+		if app != c.app || disclaimed != c.disclaimed {
+			t.Errorf("host(%v) = %q, %v; want %q, %v", c.paths, app, disclaimed, c.app, c.disclaimed)
+		}
+	}
+}
