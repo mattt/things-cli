@@ -364,4 +364,6 @@ by its authors and contributors, under the Apache License 2.0.
 ## License
 
 This project is available under the MIT license.
-See [LICENSE.md](LICENSE.md).
+See [LICENSE.md](LICENSE.md) and
+[third-party notices](THIRD_PARTY_NOTICES.md).
+Release archives include dependency licenses and the things.py license.

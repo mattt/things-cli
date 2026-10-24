@@ -24,7 +24,7 @@ $(error Set THINGS_NOTARY_PROFILE to a notarytool Keychain profile name)
 endif
 endif
 
-.PHONY: all build install uninstall clean setup generate fmt lint vet test fuzz benchmark demo helper notarize
+.PHONY: licenses check-release all build install uninstall clean setup generate fmt lint vet test fuzz benchmark demo helper notarize
 all: things
 build: things
 
@@ -93,3 +93,11 @@ notarize: helper
 	xcrun stapler staple "$(HELPER)"
 	xcrun stapler validate "$(HELPER)"
 	ditto -c -k --keepParent "$(HELPER)" dist/things-callback.zip
+
+# Collect license files from the local module cache; no network is used.
+licenses:
+	$(GO) run ./scripts
+
+# Pass the release archive paths with ARCHIVES="path/to/archive.tar.gz ...".
+check-release:
+	$(GO) run ./scripts --archive $(ARCHIVES)

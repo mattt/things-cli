@@ -41,3 +41,31 @@ and does not send a Things mutation.
 THINGS_TEST_HELPER="$PWD/dist/Things CLI Callback.app" \
   go test ./internal/callback -run TestNativeHelperDelivery -v
 ```
+
+## Archive licenses
+
+`make licenses` copies the license and notice files from the cached Go modules
+linked into the Darwin amd64 and arm64 binaries, plus the Go license.
+It uses no network access.
+The things.py Apache license is kept in `licenses/things.py-Apache-2.0.txt`.
+Run `make licenses` after a dependency or notice change and commit the result.
+`make test` compares the copies with the module cache and checks the manifest.
+The GoReleaser before hook also checks the copies before building an archive.
+
+The earlier untracked `dist/dependency-licenses` directory in the main checkout
+contained 28 files that match the pinned module cache.
+There was no collection step in the committed build configuration.
+The checked-in `licenses/dependencies` directory replaces that build dependency.
+The things.py license text was recovered from the earlier local release archive;
+the source revision and any upstream NOTICE file still need an upstream check
+before publication.
+
+After a snapshot or release build, check each archive with:
+
+```sh
+make check-release ARCHIVES="/path/to/things_darwin_arm64.tar.gz /path/to/things_darwin_amd64.tar.gz"
+```
+
+The check requires the binary, README, project license, adaptation notice,
+license manifest, and every license file with its recorded digest.
+It rejects missing, changed, or duplicate license entries.
