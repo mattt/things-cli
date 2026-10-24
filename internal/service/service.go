@@ -110,9 +110,26 @@ func (s *Service) reconcile(ctx context.Context, o domain.Operation) (domain.Ope
 	if err != nil {
 		return o, err
 	}
+	if err := checkOperationDatabase(o, snap); err != nil {
+		return o, err
+	}
 	if !s.observe(&o, snap) {
 		o.State = "unknown"
 		o.Outcome = "unknown"
 	}
 	return s.persist(ctx, o)
+}
+
+func (s *Service) checkWriteDatabase() error {
+	if reader, ok := s.Reader.(interface{ CheckWriteDatabase() error }); ok {
+		return reader.CheckWriteDatabase()
+	}
+	return nil
+}
+
+func checkOperationDatabase(o domain.Operation, snap readstore.Snapshot) error {
+	if o.Database != snap.Database {
+		return domain.E("operation_database_mismatch", "Select the database recorded for this operation. Records without a database identity cannot be reconciled against a Things database.", 5)
+	}
+	return nil
 }

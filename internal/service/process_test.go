@@ -79,6 +79,7 @@ func TestProcessMutationHelper(t *testing.T) {
 
 func TestTwoProcessesShareReplayProtection(t *testing.T) {
 	db, path := testutil.Database(t)
+	testutil.Discoverable(t, path)
 	testutil.Exec(t, db, "INSERT INTO TMTask(uuid,title) VALUES('task','Before')")
 	dir := t.TempDir()
 	exe, err := os.Executable()

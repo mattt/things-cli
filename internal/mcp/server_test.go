@@ -25,6 +25,7 @@ func TestMCPInitializationToolsAndOutcomes(t *testing.T) {
 	for _, readOnly := range []bool{true, false} {
 		t.Run(map[bool]string{true: "read_only", false: "writes"}[readOnly], func(t *testing.T) {
 			db, path := testutil.Database(t)
+			testutil.Discoverable(t, path)
 			testutil.Exec(t, db, `INSERT INTO TMTask(uuid,title,start) VALUES ('task','Task',0)`)
 			j, err := journal.Open(t.TempDir())
 			if err != nil {

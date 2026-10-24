@@ -12,6 +12,7 @@ type Evidence struct {
 }
 
 type Operation struct {
+	Database          string      `json:"database_identity,omitempty"`
 	ID                string      `json:"operation_id"`
 	RequestKey        string      `json:"request_key,omitempty"`
 	RequestHash       string      `json:"request_hash"`

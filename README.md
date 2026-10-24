@@ -45,6 +45,14 @@ If several local libraries exist, choose one explicitly:
 things --database "/path/to/main.sqlite" list today
 ```
 
+Writes require the single automatically discovered Things library.
+Other database files support reads and dry runs only.
+If discovery finds several libraries, writes are blocked until the active
+library can be established.
+Operation records contain the canonical file identity.
+Reconciliation requires the same database file; older records without an
+identity cannot be reconciled against a Things database.
+
 If macOS blocks the database, grant access to the terminal or assistant
 that launches `things` in System Settings > Privacy & Security.
 Do not run the CLI with elevated privileges.

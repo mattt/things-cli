@@ -49,6 +49,16 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 		return domain.Operation{}, err
 	}
 
+	if reserved != nil {
+		if err := checkOperationDatabase(*reserved, snap); err != nil {
+			return domain.Operation{}, err
+		}
+	}
+	if !input.DryRun {
+		if err := s.checkWriteDatabase(); err != nil {
+			return domain.Operation{}, err
+		}
+	}
 	id, err := newID()
 	if err != nil {
 		return domain.Operation{}, err
@@ -56,6 +66,7 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 	now := s.now().UTC()
 	o := domain.Operation{
 		ID:          id,
+		Database:    snap.Database,
 		RequestKey:  input.OperationKey,
 		RequestHash: requestHash(r),
 		InputHash:   hash,
@@ -126,11 +137,17 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 		if err != nil {
 			return s.failPrepared(ctx, o, domain.AsError(err))
 		}
+		if err := checkOperationDatabase(o, fresh); err != nil {
+			return s.failPrepared(ctx, o, domain.AsError(err))
+		}
 		if current.Fingerprint != before.Fingerprint {
 			return s.failPrepared(ctx, o, domain.E("fingerprint_conflict", "The item changed during preflight. No URL was dispatched.", 6))
 		}
 	}
 
+	if err := s.checkWriteDatabase(); err != nil {
+		return s.failPrepared(ctx, o, domain.AsError(err))
+	}
 	count := 0
 	if before == nil {
 		count = 1 + len(r.Items)
@@ -203,6 +220,9 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 		}
 
 		fresh, readErr := s.Reader.Snapshot(verifyCtx)
+		if readErr == nil {
+			readErr = checkOperationDatabase(o, fresh)
+		}
 		if readErr == nil && s.observe(&o, fresh) {
 			return s.persist(ctx, o)
 		}

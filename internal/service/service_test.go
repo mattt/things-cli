@@ -18,11 +18,12 @@ import (
 )
 
 type memoryReader struct {
-	mu     sync.Mutex
-	items  []domain.Item
-	err    error
-	reads  int
-	onRead func(int, []domain.Item)
+	mu       sync.Mutex
+	items    []domain.Item
+	err      error
+	database string
+	reads    int
+	onRead   func(int, []domain.Item)
 }
 
 func TestCallbacksRecordRejectionAndAcknowledgment(t *testing.T) {
@@ -107,7 +108,7 @@ func (m *memoryReader) Snapshot(context.Context) (readstore.Snapshot, error) {
 	for n := range copy {
 		copy[n].Fingerprint = domain.Fingerprint(copy[n])
 	}
-	return readstore.Snapshot{Items: copy, ObservedAt: time.Now().UTC(), Version: 24}, m.err
+	return readstore.Snapshot{Items: copy, Database: m.database, ObservedAt: time.Now().UTC(), Version: 24}, m.err
 }
 
 type dispatchFunc func(context.Context, string) error
@@ -606,5 +607,24 @@ func TestTagIdentityAndDuplicateTitles(t *testing.T) {
 				t.Fatal(raw)
 			}
 		})
+	}
+}
+
+func TestReconcileRejectsDifferentDatabase(t *testing.T) {
+	s, m := testService(t, todo("task", "Task"))
+	m.database = "library-a"
+	o := domain.Operation{ID: "database-operation", Database: "library-a", Request: domain.Request{Action: "update", ID: "task", Patch: domain.Patch{Title: str("Task")}}, State: "dispatching", Outcome: "unknown"}
+	if err := s.Journal.Save(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+	m.database = "library-b"
+	got, err := s.Operation(context.Background(), o.ID, true)
+	if err == nil || domain.AsError(err).Code != "operation_database_mismatch" || got.Outcome != "unknown" {
+		t.Fatal(got, err)
+	}
+	m.database = "library-a"
+	got, err = s.Operation(context.Background(), o.ID, true)
+	if err != nil || got.Outcome != "confirmed" {
+		t.Fatal(got, err)
 	}
 }

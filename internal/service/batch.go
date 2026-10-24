@@ -42,6 +42,7 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 		}
 	}
 
+	database := ""
 	plans := []domain.Request{}
 	count := 0
 	updates := map[string]bool{}
@@ -50,7 +51,7 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 			return domain.Operation{}, domain.E("invalid_batch_action", "Set the operation key and dry-run flag on the parent batch.", 2)
 		}
 
-		r, _, _, err := s.prepare(ctx, input)
+		r, snap, _, err := s.prepare(ctx, input)
 		if err != nil {
 			if existing != nil {
 				return *existing, domain.E("operation_key_conflict", "This operation key belongs to a different batch.", 2)
@@ -58,6 +59,10 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 			return domain.Operation{}, err
 		}
 
+		if database != "" && database != snap.Database {
+			return domain.Operation{}, domain.E("operation_database_mismatch", "The database changed during batch validation.", 5)
+		}
+		database = snap.Database
 		if r.ID != "" {
 			if updates[r.ID] {
 				return domain.Operation{}, domain.E("duplicate_batch_target", "A batch can update each item only once. Combine its fields in one patch.", 2)
@@ -86,6 +91,12 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 		return domain.Operation{}, domain.E("batch_limit", "A batch can create at most 250 items, including nested project items.", 2)
 	}
 
+	if !b.DryRun {
+		if err := s.checkWriteDatabase(); err != nil {
+			return domain.Operation{}, err
+		}
+	}
+
 	// Check authorization for the entire batch before any child is dispatched.
 	if !b.DryRun && len(updates) > 0 {
 		if s.Tokens == nil {
@@ -103,6 +114,7 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 	now := s.now().UTC()
 	parent := domain.Operation{
 		ID:          id,
+		Database:    database,
 		RequestKey:  b.OperationKey,
 		RequestHash: canonicalHash,
 		InputHash:   hash,
@@ -124,6 +136,7 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 		}
 		child := domain.Operation{
 			ID:          cid,
+			Database:    database,
 			RequestHash: requestHash(r),
 			InputHash:   requestHash(b.Actions[n]),
 			Request:     r,

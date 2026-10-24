@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/xml"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
@@ -17,8 +19,9 @@ import (
 )
 
 type Store struct {
-	db      *sql.DB
-	version int
+	db       *sql.DB
+	version  int
+	database string
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -26,7 +29,24 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, domain.E("database_access", "Cannot read the Things database. Check its path and macOS privacy permissions.", 4)
 	}
+	info, err := f.Stat()
 	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil, err
+	}
+	canonical, err = filepath.Abs(canonical)
+	if err != nil {
+		return nil, err
+	}
+	var stat unix.Stat_t
+	if err := unix.Stat(path, &stat); err != nil {
+		return nil, err
+	}
+	identity := domain.Hash([]any{canonical, stat.Dev, stat.Ino, info.Mode().Type()})
 
 	u := url.URL{Scheme: "file", Path: path}
 	q := url.Values{"mode": {"ro"}, "_pragma": {"busy_timeout(1500)", "query_only(1)"}}
@@ -38,7 +58,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	db.SetMaxOpenConns(2)
 	db.SetMaxIdleConns(2)
 
-	s := &Store{db: db}
+	s := &Store{db: db, database: identity}
 	if err := s.probe(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -138,7 +158,7 @@ func (s *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 	}
 	defer tx.Rollback()
 
-	snap := Snapshot{Items: []domain.Item{}, ObservedAt: time.Now().UTC(), Version: s.version}
+	snap := Snapshot{Items: []domain.Item{}, ObservedAt: time.Now().UTC(), Database: s.database, Version: s.version}
 	rows, err := tx.QueryContext(ctx,
 		`SELECT uuid,type,status,COALESCE(title,''),COALESCE(notes,''),trashed,start,startDate,startBucket,deadline,deadlineSuppressionDate,reminderTime,"index",todayIndex,COALESCE(area,''),COALESCE(project,''),COALESCE(heading,''),creationDate,userModificationDate,stopDate,rt1_recurrenceRule,COALESCE(rt1_repeatingTemplate,'') FROM TMTask`,
 	)

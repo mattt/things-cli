@@ -3,6 +3,8 @@ package readstore
 import (
 	"context"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/mattt/things-cli/internal/domain"
@@ -97,5 +99,53 @@ func TestDateAndReminderDecoding(t *testing.T) {
 	rem, err := decodeTime(sql.NullInt64{Int64: 0, Valid: true})
 	if err != nil || rem != "00:00" {
 		t.Fatal(rem, err)
+	}
+}
+
+func TestWriteDatabaseSelectionAndIdentity(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	_, backup := testutil.Database(t)
+	active := filepath.Join(home, "Library", "Group Containers", "JLMPQHK86H.com.culturedcode.ThingsMac", "ThingsData-test", "Things Database.thingsdatabase", "main.sqlite")
+	if err := os.MkdirAll(filepath.Dir(active), 0700); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(active, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := (Lazy{Path: backup}).CheckWriteDatabase(); err == nil || domain.AsError(err).Code != "write_database_mismatch" {
+		t.Fatal(err)
+	}
+	if err := (Lazy{Path: active}).CheckWriteDatabase(); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(home, "alias.sqlite")
+	if err := os.Symlink(active, alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := (Lazy{Path: alias}).CheckWriteDatabase(); err != nil {
+		t.Fatal(err)
+	}
+	first, err := (Lazy{Path: active}).Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := (Lazy{Path: alias}).Snapshot(context.Background())
+	if err != nil || first.Database == "" || first.Database != second.Database {
+		t.Fatal(first.Database, second.Database, err)
+	}
+	if err := os.Rename(active, active+".old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(active, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	second, err = (Lazy{Path: active}).Snapshot(context.Background())
+	if err != nil || first.Database == second.Database {
+		t.Fatal("replacement retained identity", err)
 	}
 }
