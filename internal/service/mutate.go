@@ -65,20 +65,21 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 	}
 	now := s.now().UTC()
 	o := domain.Operation{
-		ID:          id,
-		Database:    snap.Database,
-		RequestKey:  input.OperationKey,
-		RequestHash: requestHash(r),
-		InputHash:   hash,
-		Request:     r,
-		State:       "prepared",
-		Outcome:     "unknown",
-		ItemIDs:     []string{},
-		Evidence:    []domain.Evidence{},
-		Errors:      []*domain.Error{},
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		DryRun:      input.DryRun,
+		ID:             id,
+		Database:       snap.Database,
+		SchedulingDate: now.In(time.Local).Format("2006-01-02"),
+		RequestKey:     input.OperationKey,
+		RequestHash:    requestHash(r),
+		InputHash:      hash,
+		Request:        r,
+		State:          "prepared",
+		Outcome:        "unknown",
+		ItemIDs:        []string{},
+		Evidence:       []domain.Evidence{},
+		Errors:         []*domain.Error{},
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		DryRun:         input.DryRun,
 	}
 	if reserved != nil {
 		o.ID = reserved.ID
@@ -98,7 +99,7 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 		return o, nil
 	}
 
-	noop := before != nil && matchPatch(*before, r.Patch, s.now())
+	noop := before != nil && matchPatch(*before, r.Patch, o.SchedulingDate)
 	if noop {
 		o.State = "verified"
 		o.Outcome = "confirmed"
@@ -176,6 +177,9 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 		return o, err
 	}
 
+	if hasEvening(r) && o.SchedulingDate != s.now().In(time.Local).Format("2006-01-02") {
+		return s.failPrepared(ctx, o, domain.E("schedule_date_changed", "The local date changed before Evening dispatch. No write was sent; submit a new operation.", 6))
+	}
 	callbacks.activate()
 	if s.Dispatcher == nil {
 		s.Dispatcher = urlscheme.System{}
@@ -279,4 +283,16 @@ func (c *callbackState) activate() {
 	if c.listener != nil {
 		c.listener.Activate()
 	}
+}
+
+func hasEvening(r domain.Request) bool {
+	if r.Patch.When != nil && *r.Patch.When == "evening" {
+		return true
+	}
+	for _, child := range r.Items {
+		if child.Patch.When != nil && *child.Patch.When == "evening" {
+			return true
+		}
+	}
+	return false
 }

@@ -590,11 +590,11 @@ func TestTagIdentityAndDuplicateTitles(t *testing.T) {
 			if err != nil || (*r.Patch.Tags)[0] != "a" {
 				t.Fatal(r, err)
 			}
-			if !matchPatch(task, r.Patch, s.now()) {
+			if !matchPatch(task, r.Patch, s.now().Format("2006-01-02")) {
 				t.Fatal("same identity must match")
 			}
 			task.Tags[0].ID = "b"
-			if matchPatch(task, r.Patch, s.now()) {
+			if matchPatch(task, r.Patch, s.now().Format("2006-01-02")) {
 				t.Fatal("different identity matched")
 			}
 			task.Tags[0].ID = "a"
@@ -664,5 +664,59 @@ func TestBatchRecoveryStopsOnChildReadError(t *testing.T) {
 	parent.State = "prepared"
 	if _, err := s.reconcile(context.Background(), parent); err == nil {
 		t.Fatal("child read error was ignored")
+	}
+}
+
+func TestEveningBatchChildAcrossMidnight(t *testing.T) {
+	for _, apply := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unchanged", true: "applied"}[apply], func(t *testing.T) {
+			item := todo("task", "Task")
+			item.StartDate, item.Evening = "2026-10-08", true
+			s, m := testService(t, item)
+			previous := s.now()
+			current := previous.AddDate(0, 0, 1)
+			s.Now = func() time.Time { return current }
+			dispatched := false
+			s.Dispatcher = dispatchFunc(func(_ context.Context, raw string) error {
+				dispatched = true
+				u, _ := url.Parse(raw)
+				if u.Query().Get("when") != "evening" {
+					t.Fatal(raw)
+				}
+				if apply {
+					m.mu.Lock()
+					m.items[0].StartDate = "2026-10-09"
+					m.mu.Unlock()
+				}
+				// Verification may run after the dispatch date.
+				current = current.AddDate(0, 0, 1)
+				return nil
+			})
+			reserved := domain.Operation{ID: "reserved-child", CreatedAt: previous}
+			o, err := s.mutateLocked(context.Background(), domain.Request{Action: "update", ID: "task", Patch: domain.Patch{When: str("evening")}}, "hash", &reserved)
+			want := "unknown"
+			if apply {
+				want = "confirmed"
+			}
+			if err != nil || !dispatched || o.Outcome != want || o.SchedulingDate != "2026-10-09" || !o.CreatedAt.Equal(previous) {
+				t.Fatal(o, err, dispatched)
+			}
+		})
+	}
+}
+
+func TestEveningDispatchRejectsDateChange(t *testing.T) {
+	s, m := testService(t, todo("task", "Task"))
+	now := s.now()
+	s.Now = func() time.Time { return now }
+	m.onRead = func(n int, _ []domain.Item) {
+		if n == 2 {
+			now = now.AddDate(0, 0, 1)
+		}
+	}
+	s.Dispatcher = dispatchFunc(func(context.Context, string) error { t.Fatal("dispatched after date changed"); return nil })
+	o, err := s.Mutate(context.Background(), domain.Request{Action: "update", ID: "task", Patch: domain.Patch{When: str("evening")}})
+	if err != nil || o.Outcome != "failed" || o.Errors[0].Code != "schedule_date_changed" {
+		t.Fatal(o, err)
 	}
 }

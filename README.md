@@ -140,6 +140,8 @@ use `--clear-when` to clear its scheduling field.
 The CLI does not parse natural-language dates.
 Use `--reminder HH:MM` with a scheduled day or evening.
 Dates and reminder times use the local timezone.
+Each operation records the calendar date used for Evening verification.
+If midnight passes before Evening dispatch, the operation fails without a write.
 
 `--tag` replaces tags; `--add-tag` adds tags.
 Every tag must already exist and have a unique title, even when selected by ID.

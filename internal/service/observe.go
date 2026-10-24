@@ -4,7 +4,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/mattt/things-cli/internal/domain"
 	"github.com/mattt/things-cli/internal/readstore"
@@ -36,13 +35,13 @@ func (s *Service) observe(o *domain.Operation, snap readstore.Snapshot) bool {
 			if o.Request.Patch.Project == nil && o.Request.Patch.Area == nil && (i.ProjectID != "" || i.AreaID != "" || i.HeadingID != "") {
 				continue
 			}
-			if matchPatch(i, o.Request.Patch, o.CreatedAt) && s.matchChildren(i, o.Request.Items, snap.Items, o.CreatedAt) {
+			if matchPatch(i, o.Request.Patch, o.SchedulingDate) && s.matchChildren(i, o.Request.Items, snap.Items, o.SchedulingDate) {
 				candidates = append(candidates, i)
 			}
 		}
 	} else {
 		for _, i := range snap.Items {
-			if i.ID == o.Request.ID && !i.Trashed && !i.ContextTrashed && matchPatch(i, o.Request.Patch, o.CreatedAt) {
+			if i.ID == o.Request.ID && !i.Trashed && !i.ContextTrashed && matchPatch(i, o.Request.Patch, o.SchedulingDate) {
 				candidates = append(candidates, i)
 			}
 		}
@@ -74,7 +73,7 @@ func (s *Service) observe(o *domain.Operation, snap readstore.Snapshot) bool {
 	return true
 }
 
-func matchPatch(i domain.Item, p domain.Patch, now time.Time) bool {
+func matchPatch(i domain.Item, p domain.Patch, schedulingDate string) bool {
 	// A to-do's public area includes its inherited project area. An explicit
 	// area destination must also remove its project and heading assignment.
 	if p.Area != nil && i.Kind == "todo" && (i.ProjectID != "" || i.HeadingID != "") {
@@ -114,7 +113,7 @@ func matchPatch(i domain.Item, p domain.Patch, now time.Time) bool {
 				return false
 			}
 		case "evening":
-			if !i.Evening || i.StartDate != now.In(time.Local).Format("2006-01-02") {
+			if schedulingDate == "" || !i.Evening || i.StartDate != schedulingDate {
 				return false
 			}
 		default:
@@ -156,7 +155,7 @@ func matchPatch(i domain.Item, p domain.Patch, now time.Time) bool {
 	return true
 }
 
-func (s *Service) matchChildren(project domain.Item, requested []domain.ProjectChild, items []domain.Item, at time.Time) bool {
+func (s *Service) matchChildren(project domain.Item, requested []domain.ProjectChild, items []domain.Item, at string) bool {
 	if len(requested) == 0 {
 		return true
 	}
