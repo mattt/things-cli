@@ -205,7 +205,8 @@ The journal and lock are stored in
 Use `--config-dir` for an isolated journal.
 Pruning removes settled records older than 90 days
 and removes those records' operation-key protection.
-Uncertain records remain available for reconciliation.
+Uncertain records and child records needed by unsettled batches remain
+available for reconciliation.
 
 ## Batches
 

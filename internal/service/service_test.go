@@ -628,3 +628,41 @@ func TestReconcileRejectsDifferentDatabase(t *testing.T) {
 		t.Fatal(got, err)
 	}
 }
+
+func TestBatchRecoveryAfterCrashAndPrune(t *testing.T) {
+	ctx := context.Background()
+	s, _ := testService(t)
+	old := s.now().Add(-91 * 24 * time.Hour)
+	child := domain.Operation{ID: "crash-child", State: "prepared", Outcome: "unknown", CreatedAt: old, UpdatedAt: old}
+	parent := domain.Operation{ID: "crash-parent", Request: domain.Request{Action: "batch"}, State: "dispatching", Outcome: "unknown", Children: []domain.Operation{child}, CreatedAt: old, UpdatedAt: old}
+	if err := s.Journal.Save(ctx, parent); err != nil {
+		t.Fatal(err)
+	}
+	child.State, child.Outcome = "verified", "confirmed"
+	child.ItemIDs = []string{"created-task"}
+	if err := s.Journal.Save(ctx, child); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Journal.Prune(ctx, s.now()); err != nil || n != 0 {
+		t.Fatal(n, err)
+	}
+	got, err := s.Operation(ctx, parent.ID, true)
+	if err != nil || got.Outcome != "confirmed" || got.Children[0].Outcome != "confirmed" || got.ItemIDs[0] != "created-task" {
+		t.Fatal(got, err)
+	}
+}
+
+func TestBatchRecoveryStopsOnChildReadError(t *testing.T) {
+	s, _ := testService(t)
+	parent := domain.Operation{ID: "parent", Request: domain.Request{Action: "batch"}, State: "dispatching", Outcome: "unknown", Children: []domain.Operation{{ID: "missing-child", State: "prepared", Outcome: "unknown"}}}
+	if _, err := s.reconcile(context.Background(), parent); err == nil {
+		t.Fatal("missing child was treated as not dispatched")
+	}
+	if err := s.Journal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	parent.State = "prepared"
+	if _, err := s.reconcile(context.Background(), parent); err == nil {
+		t.Fatal("child read error was ignored")
+	}
+}

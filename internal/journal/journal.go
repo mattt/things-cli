@@ -177,11 +177,12 @@ func (j *Journal) Prune(ctx context.Context, now time.Time) (int, error) {
 	}
 	defer unlock()
 
-	rows, err := j.db.QueryContext(ctx, "SELECT body FROM operations WHERE updated_at < ?", now.Add(-retention).UTC().Format(time.RFC3339Nano))
+	rows, err := j.db.QueryContext(ctx, "SELECT body FROM operations")
 	if err != nil {
 		return 0, err
 	}
 	ids := []string{}
+	needed := map[string]bool{}
 	for rows.Next() {
 		var b []byte
 		if err := rows.Scan(&b); err != nil {
@@ -195,7 +196,13 @@ func (j *Journal) Prune(ctx context.Context, now time.Time) (int, error) {
 			return 0, err
 		}
 		if o.Outcome == "confirmed" || o.Outcome == "failed" {
-			ids = append(ids, o.ID)
+			if o.UpdatedAt.Before(now.Add(-retention)) {
+				ids = append(ids, o.ID)
+			}
+		} else {
+			for _, child := range o.Children {
+				needed[child.ID] = true
+			}
 		}
 	}
 	err = rows.Err()
@@ -204,10 +211,15 @@ func (j *Journal) Prune(ctx context.Context, now time.Time) (int, error) {
 		return 0, err
 	}
 
+	removed := 0
 	for _, id := range ids {
+		if needed[id] {
+			continue
+		}
 		if _, err := j.db.ExecContext(ctx, "DELETE FROM operations WHERE id = ?", id); err != nil {
 			return 0, err
 		}
+		removed++
 	}
-	return len(ids), nil
+	return removed, nil
 }

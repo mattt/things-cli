@@ -90,6 +90,8 @@ func (s *Service) reconcile(ctx context.Context, o domain.Operation) (domain.Ope
 			latest, err := s.Journal.Get(ctx, c.ID)
 			if err == nil {
 				c = latest
+			} else if domain.AsError(err).Code != "operation_missing" || o.State != "prepared" || c.State != "prepared" {
+				return o, err
 			}
 			if c.Outcome == "unknown" {
 				c, err = s.reconcile(ctx, c)
