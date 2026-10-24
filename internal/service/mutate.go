@@ -81,6 +81,9 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 		UpdatedAt:      now,
 		DryRun:         input.DryRun,
 	}
+	if before != nil && before.Evening && input.Patch.When == nil && input.Patch.Reminder != nil {
+		o.SchedulingDate = before.StartDate
+	}
 	if reserved != nil {
 		o.ID = reserved.ID
 		o.CreatedAt = reserved.CreatedAt

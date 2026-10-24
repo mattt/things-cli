@@ -720,3 +720,69 @@ func TestEveningDispatchRejectsDateChange(t *testing.T) {
 		t.Fatal(o, err)
 	}
 }
+
+func TestReminderOnlyPreservesEveningDate(t *testing.T) {
+	for _, date := range []string{"2026-10-07", "2026-10-08", "2026-10-09"} {
+		for _, reminder := range []string{"", "18:00"} {
+			t.Run(date+"/"+reminder, func(t *testing.T) {
+				item := todo("task", "Task")
+				item.StartDate, item.Evening, item.Reminder = date, true, "17:00"
+				s, m := testService(t, item)
+				dispatched := false
+				s.Dispatcher = dispatchFunc(func(_ context.Context, raw string) error {
+					dispatched = true
+					u, _ := url.Parse(raw)
+					want := "evening"
+					if reminder != "" {
+						want += "@" + reminder
+					}
+					if u.Query().Get("when") != want {
+						t.Fatal(raw)
+					}
+					m.mu.Lock()
+					m.items[0].Reminder = reminder
+					m.mu.Unlock()
+					return nil
+				})
+				o, err := s.Mutate(context.Background(), domain.Request{Action: "update", ID: "task", Patch: domain.Patch{Reminder: str(reminder)}})
+				if date != "2026-10-08" {
+					if err == nil || domain.AsError(err).Code != "evening_reminder_unsupported" || dispatched {
+						t.Fatal(o, err, dispatched)
+					}
+				} else if err != nil || o.Outcome != "confirmed" || o.SchedulingDate != date {
+					t.Fatal(o, err)
+				}
+				if m.items[0].StartDate != date || !m.items[0].Evening {
+					t.Fatal("schedule changed")
+				}
+			})
+		}
+	}
+}
+
+func TestBatchReminderRevalidatesEveningDate(t *testing.T) {
+	item := todo("evening-task", "Evening")
+	item.StartDate, item.Evening, item.Reminder = "2026-10-08", true, "17:00"
+	s, m := testService(t, todo("first", "First"), item)
+	now := s.now()
+	s.Now = func() time.Time { return now }
+	dispatches := 0
+	s.Dispatcher = dispatchFunc(func(context.Context, string) error {
+		dispatches++
+		if dispatches > 1 {
+			t.Fatal("dispatched reminder after midnight")
+		}
+		m.mu.Lock()
+		m.items[0].Title = "Changed"
+		m.mu.Unlock()
+		now = now.AddDate(0, 0, 1)
+		return nil
+	})
+	o, err := s.Batch(context.Background(), domain.BatchRequest{Actions: []domain.Request{
+		{Action: "update", ID: "first", Patch: domain.Patch{Title: str("Changed")}},
+		{Action: "update", ID: "evening-task", Patch: domain.Patch{Reminder: str("")}},
+	}})
+	if err != nil || o.Outcome != "partial" || dispatches != 1 || o.Children[1].Errors[0].Code != "evening_reminder_unsupported" {
+		t.Fatal(o, err)
+	}
+}

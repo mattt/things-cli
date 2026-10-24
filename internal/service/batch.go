@@ -176,7 +176,12 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 			child.Errors = append(child.Errors, domain.E("not_dispatched", "This action was not dispatched because an earlier action did not confirm.", 6))
 			child, err = s.persist(ctx, child)
 		} else {
-			child, err = s.mutateLocked(ctx, child.Request, child.InputHash, &child)
+			input := child.Request
+			// Revalidate a reminder's inherited schedule at execution time.
+			if b.Actions[n].Patch.When == nil && b.Actions[n].Patch.Reminder != nil {
+				input.Patch.When = nil
+			}
+			child, err = s.mutateLocked(ctx, input, child.InputHash, &child)
 			if err != nil {
 				if child.ID == "" {
 					child = parent.Children[n]

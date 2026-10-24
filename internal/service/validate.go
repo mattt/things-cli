@@ -283,6 +283,9 @@ func (s *Service) validatePatch(p *domain.Patch, action string, before *domain.I
 		}
 		v := before.StartDate
 		if before.Evening {
+			if before.StartDate != today.Format("2006-01-02") {
+				return domain.E("evening_reminder_unsupported", "The URL scheme cannot preserve a non-current Evening date during a reminder-only change. Change the schedule explicitly or edit the reminder in Things.", 5)
+			}
 			v = "evening"
 		}
 		p.When = &v

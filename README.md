@@ -139,6 +139,8 @@ The update command does not advertise anytime;
 use `--clear-when` to clear its scheduling field.
 The CLI does not parse natural-language dates.
 Use `--reminder HH:MM` with a scheduled day or evening.
+Reminder-only changes on an Evening task dated before or after today are
+unsupported; change the schedule explicitly or edit the reminder in Things.
 Dates and reminder times use the local timezone.
 Each operation records the calendar date used for Evening verification.
 If midnight passes before Evening dispatch, the operation fails without a write.
