@@ -21,7 +21,11 @@ func bindMutation(c *cobra.Command, f *mutationFlags, update, project bool) {
 	}
 	c.Flags().StringVar(&f.notes, "notes", "", "Set notes")
 	c.Flags().StringVar(&f.notesFile, "notes-file", "", "Read multiline notes from a UTF-8 file")
-	c.Flags().StringVar(&f.when, "when", "", "Schedule with a date, today, tomorrow, evening, anytime, or someday")
+	whenHelp := "Schedule with a date, today, tomorrow, evening, anytime, or someday"
+	if update {
+		whenHelp = "Schedule with a date, today, tomorrow, evening, or someday; use --clear-when to clear scheduling"
+	}
+	c.Flags().StringVar(&f.when, "when", "", whenHelp)
 	c.Flags().StringVar(&f.deadline, "deadline", "", "Set an ISO calendar deadline")
 	c.Flags().StringVar(&f.reminder, "reminder", "", "Set a local HH:MM reminder on a scheduled day")
 	c.Flags().StringVar(&f.area, "area", "", "Assign an area ID or unique name")

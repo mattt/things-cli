@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,5 +93,25 @@ func TestBlockedReadJSON(t *testing.T) {
 	var r domain.Response
 	if err := json.Unmarshal(out.Bytes(), &r); err != nil || r.Error == nil || r.Data != nil {
 		t.Fatal("blocked read became empty success", out.String())
+	}
+}
+
+func TestSchedulingHelpMatchesSupportedValues(t *testing.T) {
+	for _, args := range [][]string{{"add"}, {"project", "add"}, {"update"}, {"project", "update"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var output, stderr bytes.Buffer
+			help := append(append([]string{}, args...), "--help")
+			if exit := Run(context.Background(), help, &output, &stderr); exit != 0 {
+				t.Fatal(exit, stderr.String())
+			}
+			text := output.String()
+			update := args[len(args)-1] == "update"
+			if strings.Contains(text, "anytime") == update {
+				t.Fatal(text)
+			}
+			if update && !strings.Contains(text, "use --clear-when") {
+				t.Fatal(text)
+			}
+		})
 	}
 }
