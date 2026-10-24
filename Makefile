@@ -24,7 +24,7 @@ $(error Set THINGS_NOTARY_PROFILE to a notarytool Keychain profile name)
 endif
 endif
 
-.PHONY: licenses check-release all build install uninstall clean setup generate fmt lint vet test fuzz benchmark demo helper notarize
+.PHONY: things licenses check-release all build install uninstall clean setup generate fmt lint vet test fuzz benchmark demo helper notarize
 all: things
 build: things
 
