@@ -22,10 +22,25 @@ func (System) Dispatch(ctx context.Context, value string) error {
 	if runtime.GOOS != "darwin" {
 		return domain.E("platform_unsupported", "Things URL dispatch requires macOS.", 5)
 	}
-	if err := exec.CommandContext(ctx, "/usr/bin/open", value).Run(); err != nil {
+	if err := dispatchCommand(ctx, value).Run(); err != nil {
 		return domain.E("dispatch_failed", "The Things URL could not be dispatched. The result is uncertain; inspect the operation.", 7)
 	}
 	return nil
+}
+
+// The fixed script calls Launch Services through AppKit. The URL travels only
+// through a pipe, never through process arguments or a temporary file.
+const dispatchScript = `ObjC.import('AppKit');
+var data = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
+var value = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
+if (!$.NSWorkspace.sharedWorkspace.openURL($.NSURL.URLWithString(value))) {
+    throw new Error('URL dispatch failed');
+}`
+
+func dispatchCommand(ctx context.Context, value string) *exec.Cmd {
+	command := exec.CommandContext(ctx, "/usr/bin/osascript", "-l", "JavaScript", "-e", dispatchScript)
+	command.Stdin = strings.NewReader(value)
+	return command
 }
 
 func encode(command string, q url.Values) string {

@@ -74,6 +74,8 @@ Controlled automation can use `things auth set --stdin`
 or the `THINGS_AUTH_TOKEN` environment override.
 The environment value takes precedence over Keychain.
 Tokens are never included in output or the operation journal.
+URL dispatch uses Launch Services through the built-in macOS automation bridge.
+The URL passes through standard input and is absent from process arguments.
 Creating an item does not require a token;
 updating an existing item does.
 
