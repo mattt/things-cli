@@ -14,6 +14,7 @@ import (
 	"github.com/mattt/things-cli/internal/keychain"
 	"github.com/mattt/things-cli/internal/readstore"
 	"github.com/mattt/things-cli/internal/testutil"
+	"github.com/mattt/things-cli/internal/urlscheme"
 )
 
 type memoryReader struct {
@@ -563,5 +564,47 @@ func BenchmarkList10000(b *testing.B) {
 		if err != nil || len(r.Data.([]domain.Item)) != 50 {
 			b.Fatal(r, err)
 		}
+	}
+}
+
+func TestTagIdentityAndDuplicateTitles(t *testing.T) {
+	ctx := context.Background()
+	task := todo("task", "Task")
+	task.Tags = []domain.Tag{{ID: "a", Title: "work"}}
+	for _, addition := range []bool{false, true} {
+		t.Run(map[bool]string{false: "replace", true: "add"}[addition], func(t *testing.T) {
+			s, m := testService(t, task, domain.Item{ID: "a", Kind: "tag", Title: "work"}, domain.Item{ID: "b", Kind: "tag", Title: "work"})
+			tags := []string{"b"}
+			patch := domain.Patch{Tags: &tags}
+			if addition {
+				patch = domain.Patch{AddTags: tags}
+			}
+			s.Dispatcher = dispatchFunc(func(context.Context, string) error { t.Fatal("dispatched ambiguous tag"); return nil })
+			if _, err := s.Mutate(ctx, domain.Request{Action: "update", ID: "task", Patch: patch}); err == nil || domain.AsError(err).Code != "ambiguous_tag_title" {
+				t.Fatal(err)
+			}
+			m.items = m.items[:2]
+			tags = []string{"a"}
+			r, _, _, err := s.prepare(ctx, domain.Request{Action: "update", ID: "task", Patch: domain.Patch{Tags: &tags}})
+			if err != nil || (*r.Patch.Tags)[0] != "a" {
+				t.Fatal(r, err)
+			}
+			if !matchPatch(task, r.Patch, s.now()) {
+				t.Fatal("same identity must match")
+			}
+			task.Tags[0].ID = "b"
+			if matchPatch(task, r.Patch, s.now()) {
+				t.Fatal("different identity matched")
+			}
+			task.Tags[0].ID = "a"
+			raw, err := urlscheme.Build(dispatchRequest(r, m.items), "secret", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			u, _ := url.Parse(raw)
+			if u.Query().Get("tags") != "work" {
+				t.Fatal(raw)
+			}
+		})
 	}
 }

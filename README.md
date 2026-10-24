@@ -134,7 +134,8 @@ Use `--reminder HH:MM` with a scheduled day or evening.
 Dates and reminder times use the local timezone.
 
 `--tag` replaces tags; `--add-tag` adds tags.
-Every tag must already exist and resolve uniquely.
+Every tag must already exist and have a unique title, even when selected by ID.
+Verification compares tag IDs.
 Dedicated clearing flags include `--clear-notes`, `--clear-when`,
 `--clear-deadline`, `--clear-reminder`, `--clear-tags`,
 and `--clear-checklist`.

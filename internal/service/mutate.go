@@ -145,7 +145,7 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 	}
 	defer closeCallbacks()
 
-	value, err := urlscheme.Build(r, token, callbacks.URLs)
+	value, err := urlscheme.Build(dispatchRequest(r, snap.Items), token, callbacks.URLs)
 	if err != nil {
 		return s.failPrepared(ctx, o, domain.AsError(err))
 	}

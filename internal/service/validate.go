@@ -320,17 +320,22 @@ func resolveTags(items []domain.Item, tags []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		for _, other := range items {
+			if other.Kind == "tag" && other.ID != i.ID && other.Title == i.Title {
+				return nil, domain.E("ambiguous_tag_title", "The URL scheme requires a unique tag title, even when selected by ID.", 3)
+			}
+		}
 		if strings.ContainsAny(i.Title, ",\n\r") {
 			return nil, domain.E("tag_encoding_unsupported", "This tag title cannot be represented by the Things URL scheme.", 5)
 		}
 		if !seen[i.ID] {
-			out = append(out, i.Title)
+			out = append(out, i.ID)
 			seen[i.ID] = true
 		}
 	}
 
 	sort.Strings(out)
-	if err := validateText(strings.Join(out, ","), 4000, "tags"); err != nil {
+	if err := validateText(strings.Join(tagTitles(items, out), ","), 4000, "tags"); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -390,4 +395,34 @@ func normalizeDate(v string, today time.Time, keywords bool) (string, error) {
 		return "", domain.E("invalid_date", "Use an ISO calendar date or a supported Things scheduling value.", 2)
 	}
 	return v, nil
+}
+
+// tagTitles converts verified tag identities only at the URL encoding boundary.
+func tagTitles(items []domain.Item, ids []string) []string {
+	titles := []string{}
+	for _, id := range ids {
+		for _, i := range items {
+			if i.Kind == "tag" && i.ID == id {
+				titles = append(titles, i.Title)
+			}
+		}
+	}
+	sort.Strings(titles)
+	return titles
+}
+
+func dispatchRequest(r domain.Request, items []domain.Item) domain.Request {
+	convert := func(p *domain.Patch) {
+		if p.Tags != nil {
+			titles := tagTitles(items, *p.Tags)
+			p.Tags = &titles
+		}
+		p.AddTags = tagTitles(items, p.AddTags)
+	}
+	convert(&r.Patch)
+	r.Items = append([]domain.ProjectChild{}, r.Items...)
+	for n := range r.Items {
+		convert(&r.Items[n].Patch)
+	}
+	return r
 }

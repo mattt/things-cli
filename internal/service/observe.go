@@ -126,7 +126,7 @@ func matchPatch(i domain.Item, p domain.Patch, now time.Time) bool {
 
 	titles := []string{}
 	for _, t := range i.Tags {
-		titles = append(titles, t.Title)
+		titles = append(titles, t.ID)
 	}
 	sort.Strings(titles)
 	if p.Tags != nil {
