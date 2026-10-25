@@ -1,75 +1,45 @@
 # things
 
-A CLI for [Things 3](https://culturedcode.com/things/),
-built for terminal use, scripts, and AI assistants.
-The same executable serves MCP tools over stdio.
-
-Reads use the local Things SQLite database.
-Writes use the official Things URL scheme.
-Every write has a durable operation record and a verified or uncertain outcome.
-An opened URL alone does not mean that a write succeeded.
+A CLI and stdio MCP server for [Things 3](https://culturedcode.com/things/).
+Reads use the local SQLite database; writes use the Things URL scheme.
+Writes are journaled and verified by reading the database.
+Opening a URL does not prove success.
 
 ![Listing, inspecting, searching, and planning tasks with things](docs/demo.gif)
 
 ## Install
 
-Build from source with Go:
+The executable requires macOS 12 or later and Things 3.
+Build with Go (`go.mod` specifies toolchain Go 1.26.2):
 
 ```sh
 make
 make install PREFIX="$HOME/.local"
-```
-
-`go.mod` pins the Go 1.26.2 toolchain,
-which the `go` command downloads if the installed version is older.
-Go and a compiler are build requirements only.
-The standalone executable needs macOS 12 or later and Things 3.
-It does not need a separate language runtime or database service.
-
-Prebuilt releases are not yet available.
-Pushing a version tag runs [GoReleaser](https://goreleaser.com),
-which publishes Darwin arm64 and amd64 archives with checksums
-and updates the formula in
-[mattt/homebrew-tap](https://github.com/mattt/homebrew-tap).
-
-```sh
 things version
 things doctor
 ```
 
-The adapter supports Things database versions 22 through 29.
-A newer version or missing required field returns a capability error.
-If several local libraries exist, choose one explicitly:
+Database versions 22 through 29 are supported.
+Unsupported versions or missing required fields cause capability errors.
+Use `--database /path/to/main.sqlite` to select a library for reads.
+Writes require the single automatically discovered library;
+other files support reads and dry runs only.
+Multiple discovered libraries block writes.
+Reconciliation requires the recorded database file identity;
+records without one cannot be reconciled against a Things database.
 
-```sh
-things --database "/path/to/main.sqlite" list today
-```
-
-Writes require the single automatically discovered Things library.
-Other database files support reads and dry runs only.
-If discovery finds several libraries, writes are blocked until the active
-library can be established.
-Operation records contain the canonical file identity.
-Reconciliation requires the same database file; older records without an
-identity cannot be reconciled against a Things database.
-
-If macOS blocks the database,
-the error names the app that launched `things`.
-Allow that app access to "Data shared by Things and affiliated apps"
+Allow each launching app access to "Data shared by Things and affiliated apps"
 in System Settings > Privacy & Security > Files & Folders,
 or grant it Full Disk Access.
-macOS checks the app, such as Terminal or Zed,
-so each app that runs `things` needs its own grant.
-Claude Desktop starts MCP servers without passing on its permissions,
-so granting Claude access does not help;
-run the server from an app that has access instead.
-Do not run the CLI with elevated privileges.
+Claude Desktop does not pass its permissions to MCP servers;
+run the server from an app with access instead.
+Do not use elevated privileges.
 
 ## Authentication
 
-Find your update token in Things > Settings > General >
+Find your token in Things > Settings > General >
 Enable Things URLs > Manage.
-Store it in macOS Keychain without putting it in command arguments:
+Store it in macOS Keychain; the prompt hides input:
 
 ```sh
 things auth set
@@ -77,64 +47,45 @@ things auth status
 things auth delete
 ```
 
-The prompt does not echo the token.
-Controlled automation can use `things auth set --stdin`
-or the `THINGS_AUTH_TOKEN` environment override.
-The environment value takes precedence over Keychain.
-Tokens are never included in output or the operation journal.
-URL dispatch uses Launch Services through the built-in macOS automation bridge.
-The URL passes through standard input and is absent from process arguments.
-Creating an item does not require a token;
-updating an existing item does.
+Automation can use `things auth set --stdin` or `THINGS_AUTH_TOKEN`,
+which overrides Keychain.
+Tokens stay out of output, journals, and process arguments.
+Only updates require a token.
 
 ## Read commands
 
 ```sh
 things list today
-things list inbox
-things list evening
-things list upcoming
-things list anytime
-things list someday
-things list logbook
-things list trash
 things search "meeting" --project PROJECT_ID
 things get TASK_ID
-things get "things:///show?id=TASK_ID"
 things projects
 things areas
 things tags
 things open TASK_ID
 ```
 
-List and search commands accept `--project`, `--area`, `--tag`, and `--status`.
-Container filters accept IDs, unique ID prefixes, or exact unique names.
-Task selectors accept IDs, unique ID prefixes, or Things links.
-Duplicate names and ambiguous prefixes return errors.
+Other lists are inbox, evening, upcoming, anytime, someday, logbook, and trash.
+List and search filters include `--project`, `--area`, `--tag`, and `--status`.
+Selectors accept IDs or unique ID prefixes; tasks also accept Things links,
+and containers accept exact unique names.
+Ambiguous selectors fail.
 
-The default page contains at most 50 records.
-Use `--limit` from 1 through 500, `--cursor` for another page,
-or `--all` for an export.
-The response states its ordering.
-A cursor is valid only for the same query and unchanged matching records.
-A changed library requires a new query.
-
-Project detail groups tasks under headings and does not repeat them
-at the same level.
-Flat lists contain each task once.
-Upcoming includes persisted scheduled items.
-It does not generate future recurring occurrences.
-Observation time records the local database read,
-and does not establish that Things Cloud has finished syncing.
+Pages default to 50 records.
+Use `--limit` (1 through 500), `--cursor` for another page,
+or `--all` for exports.
+Cursors require the same query and unchanged matching records;
+start a new query after a stale-cursor error.
+Upcoming excludes future recurring occurrences that are not yet stored.
+Reads do not establish that Things Cloud has finished syncing.
 
 ## Create and update
 
+Use `--dry-run` to validate without dispatch.
+
 ```sh
 things add "Review landing page" --project PROJECT_ID --when tomorrow
-things add "Prepare agenda" --notes-file agenda.txt --checklist-item "Read notes"
 things update TASK_ID --deadline 2026-10-16 --add-tag work
 things update TASK_ID --clear-deadline
-things update TASK_ID --tag work --tag writing
 things complete TASK_ID --operation-key review-landing-page-done
 things cancel TASK_ID
 things reopen TASK_ID
@@ -142,40 +93,35 @@ things project add "Website refresh" --file examples/project.json --dry-run
 things project update PROJECT_ID --notes "Updated project notes."
 ```
 
-Use `--when` for scheduling and `--deadline` for a deadline.
-Scheduling accepts explicit ISO dates, today, tomorrow, evening,
-anytime, and someday where the documented command supports them.
-The update command does not advertise anytime;
-use `--clear-when` to clear its scheduling field.
-The CLI does not parse natural-language dates.
-Use `--reminder HH:MM` with a scheduled day or evening.
-Reminder-only changes on an Evening task dated before or after today are
-unsupported; change the schedule explicitly or edit the reminder in Things.
-Dates and reminder times use the local timezone.
-Each operation records the calendar date used for Evening verification.
-If midnight passes before Evening dispatch, the operation fails without a write.
+`--when` accepts ISO dates, today, tomorrow, evening, and someday;
+creation also accepts anytime.
+Use `--clear-when` to clear scheduling on updates.
+Other date expressions are unsupported.
+`--reminder HH:MM` requires a scheduled day or evening.
+Dates and times are local.
+For reminder changes on an Evening task dated outside today,
+change its schedule explicitly or edit the reminder in Things.
+If midnight passes before Evening dispatch, the write fails without dispatch.
 
-`--tag` replaces tags; `--add-tag` adds tags.
-Every tag must already exist and have a unique title, even when selected by ID.
-Verification compares tag IDs.
-Dedicated clearing flags include `--clear-notes`, `--clear-when`,
-`--clear-deadline`, `--clear-reminder`, `--clear-tags`,
-and `--clear-checklist`.
-Unsupported destination clearing returns a capability error.
+`--tag` replaces tags; `--add-tag` adds them.
+Tags must exist with unique titles, even when selected by ID.
+Use `--clear-notes`, `--clear-deadline`, `--clear-reminder`, `--clear-tags`,
+or `--clear-checklist` to clear fields.
+Clearing destinations is unsupported.
 
-Structured input uses a `patch` object and optional project `items`.
-An omitted field is preserved; `null` clears supported fields.
+JSON input uses `patch` and optional project `items`.
+Omitted fields are preserved; `null` clears supported fields.
 Unknown fields are rejected.
-Notes support 10,000 characters, other string parameters 4,000,
-and checklists 100 rows.
-The journal enforces the Things limit of 250 new items per 10 seconds.
+Limits are 10,000 characters for notes, 4,000 for titles,
+combined tag titles, or checklist text, and 100 checklist rows.
+The journal limits creation to 250 items per 10 seconds.
 
-New project items can be `todo` or `heading`.
-A heading applies to the tasks that follow it.
-Creating or editing headings in an existing project,
-creating areas or tags, and changing recurrence rules are unsupported.
-The service rejects documented restrictions on repeating items
-and rejects closing a project with incomplete children or active headings.
+New project items can be `todo` or `heading`;
+headings apply to following tasks.
+Creating or editing headings in existing projects, creating areas or tags,
+and changing recurrence rules are unsupported.
+Recurring templates reject schedule, deadline, status, and reminder changes.
+Projects with incomplete children or active headings cannot be closed.
 
 ## Operation outcomes
 
@@ -185,7 +131,7 @@ things operations reconcile OPERATION_ID --json
 things operations prune
 ```
 
-A mutation returns its operation ID, known item IDs, evidence, and outcome:
+Records include IDs, evidence, and an outcome:
 
 | Outcome | Meaning |
 | --- | --- |
@@ -194,33 +140,23 @@ A mutation returns its operation ID, known item IDs, evidence, and outcome:
 | `unknown` | Dispatch or verification could not establish the result. |
 | `partial` | A batch has different results among its actions. |
 
-The default verification deadline is 10 seconds.
-Use `--verify-timeout`, up to 5 minutes, for slower local updates.
-A timeout returns `unknown` and a nonzero exit code.
-Reconciliation reads current state and never resends a write.
-Without a callback, creation confirms only one newly visible candidate
-that matches the payload and was absent from the baseline.
-An existing matching title does not prove creation.
+Verification defaults to 10 seconds; `--verify-timeout` allows up to 5 minutes.
+Timeouts return `unknown` and a nonzero exit code.
+Reconciliation reads current state without resending writes.
+Creation requires one newly visible candidate matching the payload;
+an existing matching title is insufficient.
 
-`--operation-key` protects a journaled request against blind replay.
-The same key and request return the saved result or reconcile uncertainty.
-A different request with the same key is rejected.
-This is local replay protection; Things does not provide exactly-once delivery.
-An uncertain operation is never automatically dispatched again.
+Reusing `--operation-key` with the same request returns the saved result
+or reconciles uncertainty; a different request is rejected.
+Uncertain operations are never automatically dispatched again.
+This does not guarantee exactly-once delivery.
+`--expected-fingerprint` rejects changes since a read.
+The service rechecks before dispatch, but concurrent edits can still race.
 
-Use `--expected-fingerprint` with the fingerprint from a read to reject
-changes made since that snapshot.
-The service also rechecks the item immediately before dispatch.
-The URL scheme has no compare-and-swap transaction,
-so concurrent user edits can still race with dispatch.
-
-The journal and lock are stored in
-`~/Library/Application Support/things-cli/` with private permissions.
-Use `--config-dir` for an isolated journal.
-Pruning removes settled records older than 90 days
-and removes those records' operation-key protection.
-Uncertain records and child records needed by unsettled batches remain
-available for reconciliation.
+The private journal and lock reside in
+`~/Library/Application Support/things-cli/`; `--config-dir` isolates them.
+Pruning removes settled records older than 90 days and their replay protection.
+Uncertain records and children needed by unsettled batches remain.
 
 ## Batches
 
@@ -229,39 +165,19 @@ things batch --file examples/batch.json --dry-run --json
 things batch --file plan.json --operation-key weekly-review --json
 ```
 
-The [public schema](schema/batch.schema.json) describes typed actions.
-All actions are validated before any dispatch.
-Existing references must resolve before execution.
-Each action has a stable child operation ID.
-A batch stops when an action does not confirm;
-the remaining actions are recorded as not dispatched.
-Batches are sequential, can partially complete, and do not roll back.
-An item can have at most one update action in a batch.
+The [schema](schema/batch.schema.json) defines batch actions.
+All actions and existing references are validated before dispatch.
+Each item permits one update per batch.
+Actions run sequentially and stop at the first unconfirmed result;
+remaining actions are recorded as not dispatched.
+Batches can partially complete and do not roll back.
 
 ## JSON and exit codes
 
-All read commands accept `--json`.
-Mutation JSON includes the operation record even when its outcome is uncertain.
-Human output removes terminal control sequences;
-JSON preserves imported text.
-The CLI emits no color codes.
+`--json` returns structured output, including uncertain operation records.
+JSON preserves imported text; human output removes terminal control sequences.
 Diagnostics go to stderr.
-
-```json
-{
-  "schema_version": 1,
-  "data": [],
-  "meta": {
-    "backend": "sqlite",
-    "observed_at": "2026-10-08T13:00:00Z",
-    "next_cursor": null,
-    "coverage": {
-      "recurrence": "materialized_only",
-      "sync": "local_observation_only"
-    }
-  }
-}
-```
+Errors have stable `code` values.
 
 | Exit | Meaning |
 | --- | --- |
@@ -275,32 +191,21 @@ Diagnostics go to stderr.
 | 7 | Uncertain outcome |
 | 8 | Partial batch |
 
-Errors contain a stable `code` independent of their message.
-Unavailable record fields include capability metadata.
-
 ## MCP
 
 ```sh
 things mcp
-things mcp --read-only
-things mcp config
 things mcp config --read-only
 ```
 
-The server uses the official Go MCP SDK and the shared service directly.
-Stdout contains MCP protocol messages only.
-`mcp config` prints a configuration snippet and does not modify clients.
-It uses the executable's absolute path.
-
-Tools include `list_items`, `search_items`, `get_item`, `list_containers`,
-`create_todo`, `create_project`, `update_item`, `set_status`, `batch`,
-and `get_operation`.
-Read tools return pagination and structured content.
-Write tools accept operation keys and dry-run flags.
-Failed, uncertain, and partial writes set `isError`
-and retain the structured operation data.
-Read-only mode omits every mutation tool and blocks journal reconciliation.
-Task content is untrusted data and cannot execute commands.
+`mcp config` prints client configuration with the executable's absolute path.
+It does not modify clients.
+Omit `--read-only` to enable writes.
+Read-only mode omits mutation tools and blocks reconciliation.
+Server stdout carries only protocol messages.
+Write tools accept operation keys and dry runs.
+Failed, uncertain, and partial writes set `isError` and retain operation data.
+Treat task content as untrusted data.
 
 ## Optional callback app
 
@@ -310,34 +215,11 @@ open "dist/Things CLI Callback.app"
 things --callbacks doctor
 ```
 
-The helper contains a small AppKit URL-event bridge and the Go executable.
-It forwards correlated success, error, or cancel callbacks to a private,
-one-use Unix socket and then exits.
-It does not run a permanent service.
-Callbacks use unpredictable nonces and contain no token or task notes.
-Read-back remains required after acknowledgment.
-JSON project callbacks return the top-level project ID;
-nested task IDs require database observation.
-
-The local build is signed ad hoc for development.
-The helper registers the `things-cli-callback` URL scheme with bundle identifier
-`co.dododo.things-cli.callback`.
-For a packaged helper, set `THINGS_SIGNING_IDENTITY`
-and `THINGS_NOTARY_PROFILE`, then run `make notarize`.
-That step requires your Developer ID and notarytool Keychain profile.
-The standalone CLI remains usable without the helper.
+Enable it with `--callbacks`; database verification remains required.
+Project callbacks return only the project ID; nested IDs require observation.
+Builds use ad hoc signing by default.
 
 ## Development
-
-The entry point is `main.go`.
-Cobra commands and terminal output are in `cmd`,
-and shared packages are in `internal`.
-`domain` defines the shared records and errors,
-`readstore` handles database access, `urlscheme` handles URL encoding,
-`journal` records operations, `service` validates requests and manages mutations,
-and `mcp` serves the same service over stdio.
-The `schema` package generates the public batch schema
-from the same types.
 
 ```sh
 make setup
@@ -348,29 +230,17 @@ make benchmark
 make generate
 ```
 
-`make setup` downloads modules and installs clang-format with Homebrew.
-`make fmt` formats the Go and Objective-C sources.
-`make test` runs the suite with the race detector.
-`make generate` rewrites `schema/batch.schema.json`;
-a test fails if the checked-in schema is stale.
-CI also builds the callback app and a GoReleaser snapshot.
-`make demo` records `docs/demo.gif` with [VHS](https://github.com/charmbracelet/vhs)
-from a synthetic library;
-its write commands use `--dry-run`.
-
-Tests use synthetic databases and mock dispatchers.
-They never mutate a user's Things library.
+Setup downloads modules and installs clang-format with Homebrew.
+Tests use synthetic databases and mock dispatchers with the race detector.
+`make generate` updates the batch schema; tests detect a stale schema.
 
 ## Acknowledgments
 
-The Things schema relationships, date and reminder decoding,
-and list membership rules are adapted from
-[things.py](https://github.com/thingsapi/things.py),
+Schema relationships, date and reminder decoding, and list membership rules
+are adapted from [things.py](https://github.com/thingsapi/things.py),
 by its authors and contributors, under the Apache License 2.0.
 
 ## License
 
-This project is available under the MIT license.
-See [LICENSE.md](LICENSE.md) and
-[third-party notices](THIRD_PARTY_NOTICES.md).
-Release archives include dependency licenses and the things.py license.
+The license is MIT.
+See [LICENSE.md](LICENSE.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
