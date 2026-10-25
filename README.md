@@ -37,9 +37,16 @@ Do not use elevated privileges.
 
 ## Authentication
 
-Find your token in Things > Settings > General >
-Enable Things URLs > Manage.
-Store it in macOS Keychain; the prompt hides input:
+In Things, choose Things > Settings, then General.
+Select Enable Things URLs, then click Manage.
+
+<img src="docs/things-settings-general.png" width="640" alt="Things General settings with Enable Things URLs selected and the Manage button next to it">
+
+Click Copy to copy the authentication token.
+
+<img src="docs/things-url-token.png" width="559" alt="The Things URLs sheet with the Authentication Token field and the Copy and Generate New Token buttons">
+
+Store the token in macOS Keychain; the prompt hides input:
 
 ```sh
 things auth set
