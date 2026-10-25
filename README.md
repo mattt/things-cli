@@ -352,7 +352,6 @@ its write commands use `--dry-run`.
 
 Tests use synthetic databases and mock dispatchers.
 They never mutate a user's Things library.
-See [release checks](docs/release-checks.md) for remaining manual evidence.
 
 ## Acknowledgments
 
