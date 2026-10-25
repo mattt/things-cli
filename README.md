@@ -37,7 +37,7 @@ things version
 things doctor
 ```
 
-The adapter supports Things database versions 22 through 24.
+The adapter supports Things database versions 22 through 29.
 A newer version or missing required field returns a capability error.
 If several local libraries exist, choose one explicitly:
 
@@ -53,8 +53,16 @@ Operation records contain the canonical file identity.
 Reconciliation requires the same database file; older records without an
 identity cannot be reconciled against a Things database.
 
-If macOS blocks the database, grant access to the terminal or assistant
-that launches `things` in System Settings > Privacy & Security.
+If macOS blocks the database,
+the error names the app that launched `things`.
+Allow that app access to "Data shared by Things and affiliated apps"
+in System Settings > Privacy & Security > Files & Folders,
+or grant it Full Disk Access.
+macOS checks the app, such as Terminal or Zed,
+so each app that runs `things` needs its own grant.
+Claude Desktop starts MCP servers without passing on its permissions,
+so granting Claude access does not help;
+run the server from an app that has access instead.
 Do not run the CLI with elevated privileges.
 
 ## Authentication

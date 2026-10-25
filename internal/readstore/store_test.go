@@ -3,6 +3,7 @@ package readstore
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -147,5 +148,38 @@ func TestWriteDatabaseSelectionAndIdentity(t *testing.T) {
 	second, err = (Lazy{Path: active}).Snapshot(context.Background())
 	if err != nil || first.Database == second.Database {
 		t.Fatal("replacement retained identity", err)
+	}
+}
+
+func TestOpenVersionRange(t *testing.T) {
+	for v, ok := range map[int]bool{21: false, 22: true, 29: true, 30: false} {
+		db, path := testutil.Database(t)
+		testutil.Exec(t, db, "UPDATE Meta SET value=? WHERE key='databaseVersion'",
+			fmt.Sprintf(`<?xml version="1.0"?><plist><integer>%d</integer></plist>`, v))
+
+		s, err := Open(context.Background(), path)
+		if ok != (err == nil) {
+			t.Fatalf("version %d: accepted=%v, want %v (%v)", v, err == nil, ok, err)
+		}
+		if err == nil {
+			s.Close()
+		}
+	}
+}
+
+func TestHost(t *testing.T) {
+	for _, c := range []struct {
+		paths      []string
+		app        string
+		disclaimed bool
+	}{
+		{[]string{"/bin/zsh", "/Applications/Zed.app/Contents/MacOS/zed"}, "Zed", false},
+		{[]string{"/opt/homebrew/bin/uvx", "/Applications/Claude.app/Contents/Helpers/disclaimer", "/Applications/Claude.app/Contents/MacOS/Claude"}, "Claude", true},
+		{[]string{"/usr/sbin/sshd"}, "", false},
+	} {
+		app, disclaimed := host(c.paths)
+		if app != c.app || disclaimed != c.disclaimed {
+			t.Errorf("host(%v) = %q, %v; want %q, %v", c.paths, app, disclaimed, c.app, c.disclaimed)
+		}
 	}
 }

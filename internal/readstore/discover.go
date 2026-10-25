@@ -28,7 +28,7 @@ func Discover(override string) (string, error) {
 		if os.IsNotExist(err) {
 			return "", domain.E("database_missing", "No Things database was found. Open Things or use --database PATH.", 4)
 		}
-		return "", domain.E("database_access_denied", "Cannot access the Things container. Allow your terminal or assistant access in System Settings > Privacy & Security.", 4)
+		return "", accessDenied("Cannot access the Things container.")
 	}
 
 	paths := []string{}
@@ -40,7 +40,7 @@ func Discover(override string) (string, error) {
 		if _, err := os.Stat(path); err == nil {
 			paths = append(paths, path)
 		} else if !os.IsNotExist(err) {
-			return "", domain.E("database_access_denied", "Cannot inspect all Things libraries. Check macOS privacy permissions or use --database PATH.", 4)
+			return "", accessDenied("Cannot inspect all Things libraries.")
 		}
 	}
 
@@ -48,7 +48,7 @@ func Discover(override string) (string, error) {
 	if _, err := os.Stat(old); err == nil {
 		paths = append(paths, old)
 	} else if !os.IsNotExist(err) {
-		return "", domain.E("database_access_denied", "Cannot inspect the Things database. Check macOS privacy permissions.", 4)
+		return "", accessDenied("Cannot inspect the Things database.")
 	}
 
 	sort.Strings(paths)
