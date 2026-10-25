@@ -10,13 +10,19 @@ Opening a URL does not prove success.
 ## Install
 
 The executable requires macOS 12 or later and Things 3.
-Build with Go (`go.mod` specifies toolchain Go 1.26.2):
+Install it with [Homebrew](https://brew.sh):
+
+```sh
+brew install mattt/tap/things
+things version
+things doctor
+```
+
+Or build with Go (`go.mod` specifies toolchain Go 1.26.2):
 
 ```sh
 make
 make install PREFIX="$HOME/.local"
-things version
-things doctor
 ```
 
 Database versions 22 through 29 are supported.
