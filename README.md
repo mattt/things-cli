@@ -242,5 +242,5 @@ by its authors and contributors, under the Apache License 2.0.
 
 ## License
 
-The license is MIT.
-See [LICENSE.md](LICENSE.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+This project is available under the MIT license.
+See the LICENSE file for more info.
