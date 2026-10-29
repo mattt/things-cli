@@ -20,6 +20,9 @@ type Response struct {
 }
 
 func Wrap(data any, backend string, at time.Time) Response {
+	if operation, ok := data.(Operation); ok {
+		data = operation.publicResult()
+	}
 	return Response{
 		SchemaVersion: SchemaVersion,
 		Data:          data,
@@ -32,4 +35,18 @@ func Wrap(data any, backend string, at time.Time) Response {
 			},
 		},
 	}
+}
+
+// publicResult keeps verification baselines in the journal, outside CLI and MCP
+// responses. Copy children before changing them so journal records stay intact.
+func (o Operation) publicResult() Operation {
+	o.BaselineIDs = nil
+	if o.Children != nil {
+		children := make([]Operation, len(o.Children))
+		for n, child := range o.Children {
+			children[n] = child.publicResult()
+		}
+		o.Children = children
+	}
+	return o
 }
