@@ -30,7 +30,7 @@ func Discover(override string) (string, error) {
 		if os.IsNotExist(err) {
 			return "", missing(root)
 		}
-		return "", inspectFailure(root, err)
+		return "", inspectFailure(err)
 	}
 
 	paths := []string{}
@@ -41,7 +41,7 @@ func Discover(override string) (string, error) {
 		path := filepath.Join(root, entry.Name(), "Things Database.thingsdatabase", "main.sqlite")
 		found, err := exists(path)
 		if err != nil {
-			return "", inspectFailure(path, err)
+			return "", inspectFailure(err)
 		}
 		if found {
 			paths = append(paths, path)
@@ -53,7 +53,7 @@ func Discover(override string) (string, error) {
 	old := filepath.Join(root, "Things Database.thingsdatabase", "main.sqlite")
 	found, err := exists(old)
 	if err != nil {
-		return "", inspectFailure(old, err)
+		return "", inspectFailure(err)
 	}
 	if found {
 		paths = append(paths, old)
@@ -87,9 +87,9 @@ func missing(root string) error {
 }
 
 // inspectFailure shows privacy advice only for permission errors.
-func inspectFailure(path string, err error) error {
+func inspectFailure(err error) error {
 	if os.IsPermission(err) {
 		return accessDenied("Cannot access the Things database.")
 	}
-	return domain.E("database_unreadable", "Cannot inspect "+path+": "+err.Error()+". Use --database PATH to select a library.", 4)
+	return domain.E("database_unreadable", "Cannot inspect the Things database: "+err.Error()+". Use --database PATH to select a library.", 4)
 }
