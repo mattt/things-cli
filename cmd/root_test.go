@@ -115,3 +115,20 @@ func TestSchedulingHelpMatchesSupportedValues(t *testing.T) {
 		})
 	}
 }
+
+func TestDatabaseEnvironmentVariable(t *testing.T) {
+	db, path := testutil.Database(t)
+	testutil.Exec(t, db, `INSERT INTO TMTask(uuid,title) VALUES ('task','A')`)
+	t.Setenv("THINGS_DATABASE", path)
+
+	var out, stderr bytes.Buffer
+	if exit := Run(context.Background(), []string{"list", "inbox", "--json"}, &out, &stderr); exit != 0 {
+		t.Fatal(exit, stderr.String())
+	}
+
+	out.Reset()
+	stderr.Reset()
+	if exit := Run(context.Background(), []string{"--database", t.TempDir() + "/missing", "list", "inbox", "--json"}, &out, &stderr); exit != 4 {
+		t.Fatal("flag did not take precedence", exit, out.String())
+	}
+}
