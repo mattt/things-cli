@@ -28,6 +28,8 @@ make install PREFIX="$HOME/.local"
 Database versions 22 through 29 are supported.
 Unsupported versions or missing required fields cause capability errors.
 Use `--database /path/to/main.sqlite` to select a library for reads.
+Set `THINGS_DATABASE` to the same path when you cannot change the arguments,
+such as in an MCP client configuration; the flag takes precedence.
 Writes require the single automatically discovered library;
 other files support reads and dry runs only.
 Multiple discovered libraries block writes.

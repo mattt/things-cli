@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -28,6 +29,14 @@ type app struct {
 	emitted             bool
 	protocol            bool
 	service             *service.Service
+}
+
+// databasePath returns the --database flag, or THINGS_DATABASE when the flag is empty.
+func (a *app) databasePath() string {
+	if a.database != "" {
+		return a.database
+	}
+	return os.Getenv("THINGS_DATABASE")
 }
 
 func NewRoot() (*cobra.Command, *app) {
@@ -103,7 +112,7 @@ func (a *app) getService(writes bool) (*service.Service, error) {
 		}
 
 		a.service = &service.Service{
-			Reader:        readstore.Lazy{Path: a.database},
+			Reader:        readstore.Lazy{Path: a.databasePath()},
 			Tokens:        keychain.Keychain{},
 			Dispatcher:    urlscheme.System{},
 			VerifyTimeout: a.verifyTimeout,

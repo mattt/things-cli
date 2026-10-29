@@ -115,3 +115,54 @@ func TestSchedulingHelpMatchesSupportedValues(t *testing.T) {
 		})
 	}
 }
+
+func TestDatabaseEnvironmentVariable(t *testing.T) {
+	db, path := testutil.Database(t)
+	testutil.Exec(t, db, `INSERT INTO TMTask(uuid,title) VALUES ('task','Selected by THINGS_DATABASE')`)
+	// Without a Things container in HOME, only the variable can select the fixture.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("THINGS_DATABASE", path)
+
+	var out, stderr bytes.Buffer
+	if exit := Run(context.Background(), []string{"--config-dir", t.TempDir(), "list", "inbox", "--json"}, &out, &stderr); exit != 0 {
+		t.Fatal(exit, stderr.String())
+	}
+	if !strings.Contains(out.String(), "Selected by THINGS_DATABASE") {
+		t.Fatal("did not read the selected database", out.String())
+	}
+
+	out.Reset()
+	stderr.Reset()
+	if exit := Run(context.Background(), []string{"--database", t.TempDir() + "/missing", "--config-dir", t.TempDir(), "list", "inbox", "--json"}, &out, &stderr); exit != 4 {
+		t.Fatal("flag did not take precedence", exit, out.String())
+	}
+}
+
+func TestMCPConfigKeepsSelectedDatabase(t *testing.T) {
+	t.Setenv("THINGS_DATABASE", "/selected/main.sqlite")
+
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"mcp", "config"}, "/selected/main.sqlite"},
+		{[]string{"--database", "/flag/main.sqlite", "mcp", "config"}, "/flag/main.sqlite"},
+	} {
+		var out, stderr bytes.Buffer
+		if exit := Run(context.Background(), c.args, &out, &stderr); exit != 0 {
+			t.Fatal(exit, stderr.String())
+		}
+		var config struct {
+			MCPServers map[string]struct {
+				Args []string `json:"args"`
+			} `json:"mcpServers"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &config); err != nil {
+			t.Fatal(err, out.String())
+		}
+		args := config.MCPServers["things"].Args
+		if len(args) < 2 || args[0] != "--database" || args[1] != c.want {
+			t.Fatal(c.args, args)
+		}
+	}
+}

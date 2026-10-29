@@ -60,7 +60,7 @@ func (a *app) addDoctor(root *cobra.Command) {
 
 			checks = append(checks, check{"url_scheme", "unknown", "Check Things > Settings > General > Enable Things URLs. Dispatch alone cannot establish enablement."})
 
-			path, err := readstore.Discover(a.database)
+			path, err := readstore.Discover(a.databasePath())
 			if err != nil {
 				e := domain.AsError(err)
 				checks = append(checks, check{"database", "blocked", e.Message})
