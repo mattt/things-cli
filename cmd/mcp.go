@@ -35,8 +35,8 @@ func (a *app) addMCP(root *cobra.Command) {
 			}
 
 			args := []string{}
-			if a.database != "" {
-				args = append(args, "--database", a.database)
+			if database := a.databasePath(); database != "" {
+				args = append(args, "--database", database)
 			}
 			if a.configDir != "" {
 				args = append(args, "--config-dir", a.configDir)
