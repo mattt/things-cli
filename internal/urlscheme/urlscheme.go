@@ -29,16 +29,39 @@ func (System) Dispatch(ctx context.Context, value string) error {
 }
 
 // The fixed script calls Launch Services through AppKit. The URL travels only
-// through a pipe, never through process arguments or a temporary file.
+// through a pipe, never through process arguments or a temporary file. The only
+// argument selects whether Things comes to the front.
+//
+// The options variant of openURLs is deprecated, but unlike its replacement it
+// returns synchronously, so failures are reported the same way as openURL.
 const dispatchScript = `ObjC.import('AppKit');
-var data = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
-var value = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
-if (!$.NSWorkspace.sharedWorkspace.openURL($.NSURL.URLWithString(value))) {
-    throw new Error('URL dispatch failed');
+function run(argv) {
+    var data = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
+    var value = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
+    var url = $.NSURL.URLWithString(value);
+    var options = $.NSWorkspaceLaunchDefault;
+    if (argv[0] !== 'activate') {
+        options |= $.NSWorkspaceLaunchWithoutActivation;
+    }
+    if (url.isNil() || url.scheme.isNil() || !` + openURL + `) {
+        throw new Error('URL dispatch failed');
+    }
 }`
 
+const openURL = `$.NSWorkspace.sharedWorkspace.openURLsWithAppBundleIdentifierOptionsAdditionalEventParamDescriptorLaunchIdentifiers($.NSArray.arrayWithObject(url), $(), options, $(), $())`
+
+// Activation reports whether dispatching value should bring Things to the
+// front. Only show URLs reveal an item on purpose; writes stay in the
+// background so they do not take focus from the app in use.
+func activation(value string) string {
+	if strings.HasPrefix(value, "things:///show?") {
+		return "activate"
+	}
+	return "background"
+}
+
 func dispatchCommand(ctx context.Context, value string) *exec.Cmd {
-	command := exec.CommandContext(ctx, "/usr/bin/osascript", "-l", "JavaScript", "-e", dispatchScript)
+	command := exec.CommandContext(ctx, "/usr/bin/osascript", "-l", "JavaScript", "-e", dispatchScript, activation(value))
 	command.Stdin = strings.NewReader(value)
 	return command
 }
