@@ -106,21 +106,54 @@ func TestDispatchKeepsURLAndTokenOutOfArguments(t *testing.T) {
 	}
 }
 
+func TestDispatchActivatesThingsOnlyToShowItems(t *testing.T) {
+	writes := []domain.Request{
+		{Action: "create_todo", Patch: domain.Patch{Title: text("Synthetic"), When: text("someday")}},
+		{Action: "create_todo", Patch: domain.Patch{Title: text("Synthetic"), Checklist: &[]domain.ChecklistItem{{Title: "Step"}}}},
+		{Action: "create_project", Patch: domain.Patch{Title: text("Synthetic")}},
+		{Action: "update", ID: "task", Patch: domain.Patch{Deadline: text("2026-11-30")}},
+		{Action: "update_project", ID: "project", Patch: domain.Patch{Notes: text("Synthetic")}},
+	}
+	for _, r := range writes {
+		raw, err := Build(r, "synthetic-token", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := dispatchCommand(context.Background(), raw).Args; got[len(got)-1] != "background" {
+			t.Fatalf("%s dispatch arguments = %q", r.Action, got)
+		}
+	}
+	if got := dispatchCommand(context.Background(), Show("task")).Args; got[len(got)-1] != "activate" {
+		t.Fatalf("show dispatch arguments = %q", got)
+	}
+}
+
 func TestNativeDispatchBridgeReadsStandardInput(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS JavaScript for Automation bridge")
 	}
-	// Exercise the native stdin and NSURL conversion without opening any URL.
-	const open = "if (!$.NSWorkspace.sharedWorkspace.openURL($.NSURL.URLWithString(value))) {\n    throw new Error('URL dispatch failed');\n}"
-	script := strings.Replace(dispatchScript, open, "ObjC.unwrap($.NSURL.URLWithString(value).absoluteString);", 1)
+	// Exercise the native stdin, NSURL conversion, and launch options without
+	// opening any URL.
+	script := strings.Replace(dispatchScript, openURL, "(console.log(ObjC.unwrap(url.absoluteString) + ' ' + options) || true)", 1)
 	if script == dispatchScript {
 		t.Fatal("native test did not replace URL opening")
 	}
+	run := func(raw, mode string) (string, error) {
+		command := exec.Command("/usr/bin/osascript", "-l", "JavaScript", "-e", script, mode)
+		command.Stdin = strings.NewReader(raw)
+		output, err := command.CombinedOutput()
+		return strings.TrimSpace(string(output)), err
+	}
+
 	raw := "things:///update?id=synthetic&auth-token=synthetic%20token&notes=%22%3B%20throw%20new%20Error()"
-	command := exec.Command("/usr/bin/osascript", "-l", "JavaScript", "-e", script)
-	command.Stdin = strings.NewReader(raw)
-	output, err := command.Output()
-	if err != nil || strings.TrimSpace(string(output)) != raw {
-		t.Fatalf("bridge changed URL: %q (%v)", output, err)
+	for mode, options := range map[string]string{"background": "66048", "activate": "65536"} {
+		output, err := run(raw, mode)
+		if err != nil || output != raw+" "+options {
+			t.Fatalf("%s bridge changed URL or options: %q (%v)", mode, output, err)
+		}
+	}
+	// A URL without a scheme fails before Launch Services sees it.
+	if output, err := run("not a things url", "background"); err == nil || strings.Contains(output, "not") {
+		t.Fatalf("bridge accepted a URL without a scheme: %q", output)
 	}
 }
