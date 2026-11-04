@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/url"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -155,5 +156,43 @@ func TestNativeDispatchBridgeReadsStandardInput(t *testing.T) {
 	// A URL without a scheme fails before Launch Services sees it.
 	if output, err := run("not a things url", "background"); err == nil || strings.Contains(output, "not") {
 		t.Fatalf("bridge accepted a URL without a scheme: %q", output)
+	}
+}
+
+func TestDispatchProcessFailures(t *testing.T) {
+	// Failure to start proves that the helper could not send a URL.
+	command := exec.Command("/things-cli-nonexistent/osascript")
+	if e := domain.AsError(runDispatch(command)); e.Code != "not_dispatched" || e.Exit != 6 {
+		t.Fatal(e)
+	}
+	// An unsuccessful exit after start cannot prove that no URL was sent.
+	command = exec.Command("/bin/sh", "-c", "exit 1")
+	if e := domain.AsError(runDispatch(command)); e.Code != "dispatch_failed" || e.Exit != 7 {
+		t.Fatal(e)
+	}
+}
+
+func TestSandboxDispatchStartFailure(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS sandbox")
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("/usr/bin/sandbox-exec", "-p", `(version 1)(allow default)(deny process-exec (literal "/usr/bin/osascript"))`, executable, "-test.run=^TestSandboxDispatchHelper$")
+	command.Env = append(os.Environ(), "THINGS_TEST_SANDBOX_DISPATCH=1")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("sandbox dispatch classification: %v: %s", err, output)
+	}
+}
+
+func TestSandboxDispatchHelper(t *testing.T) {
+	if os.Getenv("THINGS_TEST_SANDBOX_DISPATCH") != "1" {
+		t.Skip("subprocess helper")
+	}
+	err := (System{}).Dispatch(context.Background(), "things-cli-diagnostic-nonexistent:///probe")
+	if e := domain.AsError(err); e.Code != "not_dispatched" || e.Exit != 6 {
+		t.Fatal(e)
 	}
 }

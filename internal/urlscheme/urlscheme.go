@@ -22,7 +22,14 @@ func (System) Dispatch(ctx context.Context, value string) error {
 	if runtime.GOOS != "darwin" {
 		return domain.E("platform_unsupported", "Things URL dispatch requires macOS.", 5)
 	}
-	if err := dispatchCommand(ctx, value).Run(); err != nil {
+	return runDispatch(dispatchCommand(ctx, value))
+}
+
+func runDispatch(command *exec.Cmd) error {
+	if err := command.Start(); err != nil {
+		return domain.E("not_dispatched", "The URL dispatch helper could not start. No write was sent. Check sandbox permissions for /usr/bin/osascript.", 6)
+	}
+	if err := command.Wait(); err != nil {
 		return domain.E("dispatch_failed", "The Things URL could not be dispatched. The result is uncertain; inspect the operation.", 7)
 	}
 	return nil
