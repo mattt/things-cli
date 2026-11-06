@@ -786,3 +786,26 @@ func TestBatchReminderRevalidatesEveningDate(t *testing.T) {
 		t.Fatal(o, err)
 	}
 }
+
+func TestDispatchNotStartedIsDurableFailure(t *testing.T) {
+	s, m := testService(t, todo("task", "Before"))
+	calls := 0
+	s.Dispatcher = dispatchFunc(func(context.Context, string) error {
+		calls++
+		return domain.E("not_dispatched", "Helper did not start.", 6)
+	})
+	request := domain.Request{Action: "update", ID: "task", Patch: domain.Patch{Title: str("After")}, OperationKey: "start-failure"}
+	o, err := s.Mutate(context.Background(), request)
+	if err != nil || o.Outcome != "failed" || domain.AsError(o.ResultError()).Code != "not_dispatched" {
+		t.Fatal(o, err)
+	}
+	reads := m.reads
+	saved, err := s.Operation(context.Background(), o.ID, true)
+	if err != nil || saved.Outcome != "failed" || m.reads != reads {
+		t.Fatal(saved, err, m.reads, reads)
+	}
+	replay, err := s.Mutate(context.Background(), request)
+	if err != nil || replay.ID != o.ID || calls != 1 {
+		t.Fatal(replay, err, calls)
+	}
+}

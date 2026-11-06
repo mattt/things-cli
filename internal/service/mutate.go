@@ -189,6 +189,9 @@ func (s *Service) mutateLocked(ctx context.Context, input domain.Request, hash s
 	}
 	dispatchErr := s.Dispatcher.Dispatch(ctx, value)
 	if dispatchErr != nil {
+		if e := domain.AsError(dispatchErr); e.Code == "not_dispatched" {
+			return s.failPrepared(ctx, o, e)
+		}
 		o.Errors = append(o.Errors, domain.E("dispatch_uncertain", "URL dispatch did not return a reliable acknowledgment.", 7))
 	}
 

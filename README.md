@@ -155,9 +155,17 @@ Records include IDs, evidence, and an outcome:
 | `unknown` | Dispatch or verification could not establish the result. |
 | `partial` | A batch has different results among its actions. |
 
-Verification defaults to 10 seconds; `--verify-timeout` allows up to 5 minutes.
+If the URL dispatch helper cannot start, the operation fails with `not_dispatched`.
+Check whether the calling shell permits execution of `/usr/bin/osascript`.
+Errors after the helper starts can still leave an uncertain outcome.
+
+Verification defaults to 10 seconds per action;
+`--verify-timeout` allows up to 5 minutes.
 Timeouts return `unknown` and a nonzero exit code.
+For slow batches, increase `--verify-timeout` before dispatch.
 Reconciliation reads current state without resending writes.
+An unchanged item does not prove that a queued write will never arrive;
+uncertain operations do not become failed merely because time has passed.
 Creation requires one newly visible candidate matching the payload;
 an existing matching title is insufficient.
 
