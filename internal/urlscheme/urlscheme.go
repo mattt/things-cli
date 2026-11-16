@@ -97,6 +97,7 @@ func attrs(p domain.Patch) map[string]any {
 		{"list-id", p.Project},
 		{"area-id", p.Area},
 		{"heading-id", p.Heading},
+		{"completion-date", p.CompletionDate},
 	} {
 		if f.v != nil {
 			a[f.k] = *f.v

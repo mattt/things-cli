@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,6 +69,12 @@ func TestMCPInitializationToolsAndOutcomes(t *testing.T) {
 				names[tool.Name] = true
 				if tool.InputSchema == nil {
 					t.Fatal("missing schema")
+				}
+				if tool.Name == "set_status" || tool.Name == "create_todo" || tool.Name == "update_item" {
+					b, _ := json.Marshal(tool.InputSchema)
+					if !strings.Contains(string(b), `"completion_date"`) {
+						t.Fatal(tool.Name, "omits completion_date")
+					}
 				}
 			}
 			if readOnly && names["create_todo"] {
@@ -145,5 +152,87 @@ func TestMCPStdio(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatal("unexpected diagnostics", stderr.String())
+	}
+}
+
+func TestMCPSetStatusCompletionDate(t *testing.T) {
+	db, path := testutil.Database(t)
+	testutil.Discoverable(t, path)
+	testutil.Exec(t, db, `INSERT INTO TMTask(uuid,title,start) VALUES ('task','Task',0)`)
+	j, err := journal.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer j.Close()
+
+	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.Local)
+	s := &service.Service{
+		Reader:     readstore.Lazy{Path: path},
+		Journal:    j,
+		Dispatcher: noDispatch{},
+		Now:        func() time.Time { return now },
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	st, ct := sdk.NewInMemoryTransports()
+	ss, err := New(s, false).Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "1"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	valid := time.Date(2026, 10, 1, 0, 0, 0, 0, time.Local).Format(time.RFC3339)
+	for _, c := range []struct {
+		name  string
+		args  map[string]any
+		code  string
+		patch string
+	}{
+		{"omitted", map[string]any{}, "", ""},
+		{"empty", map[string]any{"completion_date": ""}, "completion_date_clear_unsupported", ""},
+		{"null", map[string]any{"completion_date": nil}, "completion_date_clear_unsupported", ""},
+		{"valid", map[string]any{"completion_date": "2026-10-01"}, "", valid},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			args := map[string]any{"id": "task", "status": "completed", "dry_run": true}
+			for k, v := range c.args {
+				args[k] = v
+			}
+			result, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "set_status", Arguments: args})
+			if err != nil || result.StructuredContent == nil {
+				t.Fatal(result, err)
+			}
+
+			b, _ := json.Marshal(result.StructuredContent)
+			var r struct {
+				Data  *domain.Operation `json:"data"`
+				Error *domain.Error     `json:"error"`
+			}
+			if err := json.Unmarshal(b, &r); err != nil {
+				t.Fatal(err)
+			}
+			if c.code != "" {
+				if !result.IsError || r.Error == nil || r.Error.Code != c.code {
+					t.Fatal(string(b))
+				}
+				return
+			}
+			if result.IsError || r.Data == nil {
+				t.Fatal(string(b))
+			}
+			got := ""
+			if d := r.Data.Request.Patch.CompletionDate; d != nil {
+				got = *d
+			}
+			if got != c.patch {
+				t.Fatalf("completion date %q, want %q", got, c.patch)
+			}
+		})
 	}
 }

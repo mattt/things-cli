@@ -71,6 +71,8 @@ func annotate(s *jsonschema.Schema) {
 			p.Description = "HH:MM in local time, with a compatible scheduled day or evening. Null clears it."
 		case "tags":
 			p.Description = "Replace existing tags by uniquely resolved name or ID. Null clears tags."
+		case "completion_date":
+			p.Description = domain.CompletionDateDescription
 		case "add_tags":
 			p.Description = "Add existing tags without replacing unrelated tags."
 		case "operation_key":

@@ -66,6 +66,43 @@ func TestNestedProjectJSON(t *testing.T) {
 	}
 }
 
+func TestCompletionDate(t *testing.T) {
+	date := "2026-10-01T09:30:00-07:00"
+	raw, err := Build(domain.Request{
+		Action: "update",
+		ID:     "id",
+		Patch:  domain.Patch{Status: text("completed"), CompletionDate: text(date)},
+	}, "secret", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(raw)
+	if q := u.Query(); u.Path != "/update" || q.Get("completed") != "true" || q.Get("completion-date") != date {
+		t.Fatal(raw)
+	}
+
+	raw, err = Build(domain.Request{
+		Action: "create_todo",
+		Patch: domain.Patch{
+			Title:          text("T"),
+			Status:         text("canceled"),
+			CompletionDate: text(date),
+			Checklist:      &[]domain.ChecklistItem{{Title: "C", Status: "completed"}},
+		},
+	}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ = url.Parse(raw)
+	var objects []object
+	if err := json.Unmarshal([]byte(u.Query().Get("data")), &objects); err != nil {
+		t.Fatal(err)
+	}
+	if a := objects[0].Attributes; u.Path != "/json" || a["canceled"] != true || a["completion-date"] != date {
+		t.Fatal(objects)
+	}
+}
+
 func FuzzURLRoundTrip(f *testing.F) {
 	for _, s := range []string{
 		"plain",

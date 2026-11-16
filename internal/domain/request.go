@@ -21,6 +21,8 @@ type Patch struct {
 	AddTags   []string         `json:"add_tags,omitempty"`
 	Checklist *[]ChecklistItem `json:"checklist,omitempty"`
 	Status    *string          `json:"status,omitempty"`
+	// CompletionDate is an ISO 8601 date or date-time, normalized to RFC 3339.
+	CompletionDate *string `json:"completion_date,omitempty"`
 }
 
 func (p *Patch) UnmarshalJSON(b []byte) error {
@@ -59,6 +61,8 @@ func (p *Patch) UnmarshalJSON(b []byte) error {
 			a.Heading = &empty
 		case "status":
 			a.Status = &empty
+		case "completion_date":
+			a.CompletionDate = &empty
 		case "tags":
 			v := []string{}
 			a.Tags = &v
@@ -71,6 +75,9 @@ func (p *Patch) UnmarshalJSON(b []byte) error {
 	*p = Patch(a)
 	return nil
 }
+
+// CompletionDateDescription documents completion_date for published schemas.
+const CompletionDateDescription = "Past completion date for an item that is completed or canceled after the write: YYYY-MM-DD, today, or yesterday (start of the local day: 00:00, or the first valid time when daylight saving time skips midnight), local YYYY-MM-DDTHH:MM[:SS], or an RFC 3339 date-time with Z or an offset. Other local times skipped by daylight saving time are invalid; a repeated local time means its first occurrence. Future dates are rejected. It cannot be cleared, so null and empty values are rejected."
 
 type ProjectChild struct {
 	Kind  string `json:"kind"`

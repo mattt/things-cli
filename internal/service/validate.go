@@ -34,8 +34,8 @@ func (s *Service) prepare(ctx context.Context, r domain.Request) (domain.Request
 	}
 
 	if r.Action == "set_status" {
-		if r.Patch.Status == nil || domain.Hash(r.Patch) != domain.Hash(domain.Patch{Status: r.Patch.Status}) {
-			return r, snap, nil, domain.E("invalid_status_patch", "set_status accepts only a status field.", 2)
+		if r.Patch.Status == nil || domain.Hash(r.Patch) != domain.Hash(domain.Patch{Status: r.Patch.Status, CompletionDate: r.Patch.CompletionDate}) {
+			return r, snap, nil, domain.E("invalid_status_patch", "set_status accepts only status and completion_date fields.", 2)
 		}
 		i, err := resolve(snap.Items, r.ID, "", false)
 		if err != nil {
@@ -64,7 +64,7 @@ func (s *Service) prepare(ctx context.Context, r domain.Request) (domain.Request
 		if i.Trashed || i.ContextTrashed {
 			return r, snap, nil, domain.E("trashed_item", "Restore this item in Things before editing it.", 5)
 		}
-		if i.Recurrence == "template" && (r.Patch.When != nil || r.Patch.Deadline != nil || r.Patch.Status != nil || r.Patch.Reminder != nil) {
+		if i.Recurrence == "template" && (r.Patch.When != nil || r.Patch.Deadline != nil || r.Patch.Status != nil || r.Patch.Reminder != nil || r.Patch.CompletionDate != nil) {
 			return r, snap, nil, domain.E("recurrence_edit_unsupported", "The URL scheme cannot change these fields on recurring templates.", 5)
 		}
 		if r.ExpectedFingerprint != "" && r.ExpectedFingerprint != i.Fingerprint {
@@ -180,6 +180,25 @@ func (s *Service) validatePatch(p *domain.Patch, action string, before *domain.I
 
 	if p.Status != nil && *p.Status != "incomplete" && *p.Status != "completed" && *p.Status != "canceled" {
 		return domain.E("invalid_status", "Status must be incomplete, completed, or canceled.", 2)
+	}
+	if p.CompletionDate != nil {
+		if *p.CompletionDate == "" {
+			return domain.E("completion_date_clear_unsupported", "The URL scheme cannot clear a completion date.", 5)
+		}
+		v, err := normalizeCompletionDate(*p.CompletionDate, s.now())
+		if err != nil {
+			return err
+		}
+		status := ""
+		if p.Status != nil {
+			status = *p.Status
+		} else if before != nil {
+			status = before.Status
+		}
+		if status != "completed" && status != "canceled" {
+			return domain.E("completion_date_requires_closed_status", "A completion date requires a completed or canceled item. Things ignores it on open items.", 2)
+		}
+		p.CompletionDate = &v
 	}
 	if p.Project != nil && p.Area != nil {
 		return domain.E("conflicting_destination", "Choose either a project or an area.", 2)
@@ -398,6 +417,88 @@ func normalizeDate(v string, today time.Time, keywords bool) (string, error) {
 		return "", domain.E("invalid_date", "Use an ISO calendar date or a supported Things scheduling value.", 2)
 	}
 	return v, nil
+}
+
+// normalizeCompletionDate accepts an ISO calendar date, a local date-time
+// without a zone, an RFC 3339 date-time, today, or yesterday, in the location
+// of now. A date without a time, including today and yesterday, means the
+// start of that local day: 00:00, its first occurrence if a daylight saving
+// change repeats it, or the first valid time if the change skips it. Other
+// local times skipped by daylight saving time are rejected, and repeated local
+// times mean their first occurrence. The result is RFC 3339 with whole seconds.
+// Things ignores completion dates in the future, so they are rejected.
+func normalizeCompletionDate(v string, now time.Time) (string, error) {
+	loc := now.Location()
+	invalid := domain.E("invalid_completion_date", "Use YYYY-MM-DD, a local YYYY-MM-DDTHH:MM[:SS] time, an RFC 3339 date-time, today, or yesterday for a completion date. Local times skipped by daylight saving time are invalid.", 2)
+
+	var t time.Time
+	switch v {
+	case "today":
+		t = startOfDay(now.Year(), now.Month(), now.Day(), loc)
+	case "yesterday":
+		t = startOfDay(now.Year(), now.Month(), now.Day()-1, loc)
+	default:
+		if d, err := time.Parse("2006-01-02", v); err == nil {
+			t = startOfDay(d.Year(), d.Month(), d.Day(), loc)
+			break
+		}
+
+		parsed := false
+		for _, layout := range []string{"2006-01-02T15:04", "2006-01-02T15:04:05"} {
+			x, err := time.ParseInLocation(layout, v, loc)
+			if err != nil {
+				continue
+			}
+			// ParseInLocation moves a skipped local time silently.
+			if x.Format(layout) != v {
+				return "", invalid
+			}
+			t, parsed = firstOccurrence(x, layout), true
+			break
+		}
+		if !parsed {
+			x, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", invalid
+			}
+			t = x
+		}
+	}
+
+	if t.After(now) {
+		return "", domain.E("future_completion_date", "A completion date cannot be in the future. Things ignores future completion dates.", 2)
+	}
+	return t.Truncate(time.Second).In(loc).Format(time.RFC3339), nil
+}
+
+// startOfDay returns the first instant of a local calendar day. The day is
+// normalized as time.Date normalizes it, so day 0 is the previous month's last.
+func startOfDay(year int, month time.Month, day int, loc *time.Location) time.Time {
+	t := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	date := t.Format("2006-01-02")
+
+	start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+	if start.Format("2006-01-02") != date {
+		// A daylight saving change skips midnight, and Date resolved it to the
+		// previous day. The day starts when that zone period ends.
+		_, start = start.ZoneBounds()
+	}
+	return firstOccurrence(start, time.DateTime)
+}
+
+// firstOccurrence returns the earlier instant when a daylight saving change
+// repeats the local time of t. Go does not guarantee which one Date chooses.
+func firstOccurrence(t time.Time, layout string) time.Time {
+	_, before := t.Add(-24 * time.Hour).Zone()
+	_, after := t.Add(24 * time.Hour).Zone()
+	shift := time.Duration(before-after) * time.Second
+	if shift < 0 {
+		shift = -shift
+	}
+	if earlier := t.Add(-shift); shift != 0 && earlier.Format(layout) == t.Format(layout) {
+		return earlier
+	}
+	return t
 }
 
 // tagTitles converts verified tag identities only at the URL encoding boundary.
