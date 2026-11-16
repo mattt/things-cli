@@ -45,6 +45,78 @@ func TestNormalizeCompletionDate(t *testing.T) {
 	}
 }
 
+func TestNormalizeCompletionDateDaylightSaving(t *testing.T) {
+	la, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Skip("time zone data unavailable:", err)
+	}
+	now := time.Date(2026, 12, 1, 12, 0, 0, 0, la)
+
+	for _, c := range []struct {
+		in, want, code string
+	}{
+		// 2026-03-08 02:00 PST jumps to 03:00 PDT.
+		{in: "2026-03-08T02:30", code: "invalid_completion_date"},
+		{in: "2026-03-08T02:30:00", code: "invalid_completion_date"},
+		{in: "2026-03-08T01:59", want: "2026-03-08T01:59:00-08:00"},
+		{in: "2026-03-08T03:00", want: "2026-03-08T03:00:00-07:00"},
+		{in: "2026-03-08", want: "2026-03-08T00:00:00-08:00"},
+		// 2026-11-01 02:00 PDT falls back to 01:00 PST; 01:30 repeats.
+		{in: "2026-11-01T01:30", want: "2026-11-01T01:30:00-07:00"},
+		{in: "2026-11-01T01:30:00-08:00", want: "2026-11-01T01:30:00-08:00"},
+		{in: "2026-11-01T09:30:00Z", want: "2026-11-01T01:30:00-08:00"},
+		{in: "2026-03-08T10:30:00Z", want: "2026-03-08T03:30:00-07:00"},
+	} {
+		got, err := normalizeCompletionDate(c.in, now)
+		if c.code != "" {
+			if domain.AsError(err).Code != c.code {
+				t.Errorf("%s: got %q, %v; want %s", c.in, got, err, c.code)
+			}
+			continue
+		}
+		if err != nil || got != c.want {
+			t.Errorf("%s: got %q, %v; want %s", c.in, got, err, c.want)
+		}
+	}
+}
+
+func TestNormalizeCompletionDateSubsecondBoundary(t *testing.T) {
+	now := time.Date(2026, 10, 8, 12, 0, 0, 100_000_000, time.UTC)
+	got, err := normalizeCompletionDate("2026-10-08T12:00:00.1Z", now)
+	if err != nil || got != "2026-10-08T12:00:00Z" {
+		t.Fatal(got, err)
+	}
+	if _, err := normalizeCompletionDate("2026-10-08T12:00:00.9Z", now); domain.AsError(err).Code != "future_completion_date" {
+		t.Fatal(err)
+	}
+}
+
+func TestCompletionDateUpdateRequiresMatchingDate(t *testing.T) {
+	stopped := time.Date(2026, 10, 5, 0, 0, 0, 0, time.Local).UTC()
+	for name, at := range map[string]*time.Time{"missing": nil, "mismatched": &stopped} {
+		t.Run(name, func(t *testing.T) {
+			i := todo("task", "Task")
+			i.Status = "completed"
+			i.StoppedAt = at
+			s, _ := testService(t, i)
+			calls := 0
+			s.Dispatcher = dispatchFunc(func(context.Context, string) error {
+				calls++
+				return nil
+			})
+
+			o, err := s.Mutate(context.Background(), domain.Request{
+				Action: "update",
+				ID:     "task",
+				Patch:  domain.Patch{CompletionDate: str("2026-10-01")},
+			})
+			if err != nil || calls != 1 || o.Outcome != "unknown" {
+				t.Fatal(o, err, calls)
+			}
+		})
+	}
+}
+
 func TestCompleteWithCompletionDate(t *testing.T) {
 	for _, ignored := range []bool{false, true} {
 		t.Run(map[bool]string{false: "applied", true: "ignored"}[ignored], func(t *testing.T) {

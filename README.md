@@ -124,6 +124,8 @@ If midnight passes before Evening dispatch, the write fails without dispatch.
 `add`, and `update`, and on the project commands.
 It accepts `YYYY-MM-DD` (local midnight), a local `YYYY-MM-DDTHH:MM[:SS]` time,
 an RFC 3339 date-time with `Z` or an offset, `today`, and `yesterday`.
+A local time that a daylight saving change skips is rejected;
+a repeated local time means its first occurrence.
 The item must be completed or canceled after the write,
 so `add` requires `--completed` or `--canceled`.
 Future dates, open items, and repeating templates are rejected,

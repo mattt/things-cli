@@ -420,41 +420,65 @@ func normalizeDate(v string, today time.Time, keywords bool) (string, error) {
 }
 
 // normalizeCompletionDate accepts an ISO calendar date, a local date-time
-// without a zone, an RFC 3339 date-time, today, or yesterday. Dates without a
-// time mean local midnight. The result is RFC 3339 in local time with whole
-// seconds; Things ignores completion dates in the future, so they are rejected.
+// without a zone, an RFC 3339 date-time, today, or yesterday, in the location
+// of now. A date without a time means the start of that local day. A local time
+// that a daylight saving change skips is rejected; a repeated local time means
+// its first occurrence. The result is RFC 3339 with whole seconds. Things
+// ignores completion dates in the future, so they are rejected.
 func normalizeCompletionDate(v string, now time.Time) (string, error) {
-	local := now.In(time.Local)
-	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.Local)
+	loc := now.Location()
+	invalid := domain.E("invalid_completion_date", "Use YYYY-MM-DD, a local YYYY-MM-DDTHH:MM[:SS] time, an RFC 3339 date-time, today, or yesterday for a completion date. Local times skipped by daylight saving time are invalid.", 2)
 
 	var t time.Time
 	switch v {
-	case "today":
-		t = midnight
-	case "yesterday":
-		t = midnight.AddDate(0, 0, -1)
+	case "today", "yesterday":
+		days := 0
+		if v == "yesterday" {
+			days = -1
+		}
+		t = time.Date(now.Year(), now.Month(), now.Day()+days, 0, 0, 0, 0, loc)
 	default:
 		parsed := false
 		for _, layout := range []string{"2006-01-02", "2006-01-02T15:04", "2006-01-02T15:04:05"} {
-			if x, err := time.ParseInLocation(layout, v, time.Local); err == nil {
-				t, parsed = x, true
-				break
+			x, err := time.ParseInLocation(layout, v, loc)
+			if err != nil {
+				continue
 			}
+			// ParseInLocation moves a skipped local time silently.
+			if x.Format(layout) != v {
+				return "", invalid
+			}
+			t, parsed = firstOccurrence(x, layout), true
+			break
 		}
 		if !parsed {
 			x, err := time.Parse(time.RFC3339Nano, v)
 			if err != nil {
-				return "", domain.E("invalid_completion_date", "Use YYYY-MM-DD, a local YYYY-MM-DDTHH:MM[:SS] time, an RFC 3339 date-time, today, or yesterday for a completion date.", 2)
+				return "", invalid
 			}
 			t = x
 		}
 	}
 
-	t = t.Truncate(time.Second)
 	if t.After(now) {
 		return "", domain.E("future_completion_date", "A completion date cannot be in the future. Things ignores future completion dates.", 2)
 	}
-	return t.In(time.Local).Format(time.RFC3339), nil
+	return t.Truncate(time.Second).In(loc).Format(time.RFC3339), nil
+}
+
+// firstOccurrence returns the earlier instant when a daylight saving change
+// repeats the local time of t. Go does not guarantee which one Date chooses.
+func firstOccurrence(t time.Time, layout string) time.Time {
+	_, before := t.Add(-24 * time.Hour).Zone()
+	_, after := t.Add(24 * time.Hour).Zone()
+	shift := time.Duration(before-after) * time.Second
+	if shift < 0 {
+		shift = -shift
+	}
+	if earlier := t.Add(-shift); shift != 0 && earlier.Format(layout) == t.Format(layout) {
+		return earlier
+	}
+	return t
 }
 
 // tagTitles converts verified tag identities only at the URL encoding boundary.
