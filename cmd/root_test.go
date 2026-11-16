@@ -30,6 +30,14 @@ func TestCLIJSONAndExitCodes(t *testing.T) {
 		{[]string{"list", "bad", "--json"}, 2},
 		{[]string{"list", "inbox", "--limit", "0", "--json"}, 2},
 		{[]string{"version", "--json"}, 0},
+		{[]string{"complete", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0},
+		{[]string{"cancel", "task", "--completion-date", "2026-01-15T09:30:00Z", "--dry-run", "--json"}, 0},
+		{[]string{"complete", "task", "--completion-date", "2999-01-01", "--dry-run", "--json"}, 2},
+		{[]string{"complete", "task", "--completion-date", "soon", "--dry-run", "--json"}, 2},
+		{[]string{"update", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2},
+		{[]string{"add", "Done", "--completed", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0},
+		{[]string{"add", "Done", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2},
+		{[]string{"add", "Done", "--completed", "--canceled", "--dry-run", "--json"}, 2},
 	}
 
 	for _, c := range cases {

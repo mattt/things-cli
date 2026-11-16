@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,6 +69,12 @@ func TestMCPInitializationToolsAndOutcomes(t *testing.T) {
 				names[tool.Name] = true
 				if tool.InputSchema == nil {
 					t.Fatal("missing schema")
+				}
+				if tool.Name == "set_status" || tool.Name == "create_todo" || tool.Name == "update_item" {
+					b, _ := json.Marshal(tool.InputSchema)
+					if !strings.Contains(string(b), `"completion_date"`) {
+						t.Fatal(tool.Name, "omits completion_date")
+					}
 				}
 			}
 			if readOnly && names["create_todo"] {

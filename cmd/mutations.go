@@ -11,9 +11,13 @@ import (
 
 type mutationFlags struct {
 	title, notes, notesFile, when, deadline, reminder, project, area, heading, file, key, fingerprint string
+	completionDate                                                                                    string
 	tags, addTags, checklist                                                                          []string
 	clearNotes, clearWhen, clearDeadline, clearReminder, clearTags, clearChecklist, dryRun            bool
+	completed, canceled                                                                               bool
 }
+
+const completionDateHelp = "Set the completion date of a completed or canceled item: YYYY-MM-DD (local midnight), a local YYYY-MM-DDTHH:MM[:SS] time, an RFC 3339 date-time, today, or yesterday"
 
 func bindMutation(c *cobra.Command, f *mutationFlags, update, project bool) {
 	if update {
@@ -35,6 +39,11 @@ func bindMutation(c *cobra.Command, f *mutationFlags, update, project bool) {
 		c.Flags().StringArrayVar(&f.checklist, "checklist-item", nil, "Set checklist rows; repeat for each row")
 	}
 	c.Flags().StringArrayVar(&f.tags, "tag", nil, "Replace tags; repeat for each existing tag")
+	if !update {
+		c.Flags().BoolVar(&f.completed, "completed", false, "Create the item as completed")
+		c.Flags().BoolVar(&f.canceled, "canceled", false, "Create the item as canceled")
+	}
+	c.Flags().StringVar(&f.completionDate, "completion-date", "", completionDateHelp)
 
 	if update {
 		c.Flags().StringArrayVar(&f.addTags, "add-tag", nil, "Add existing tags without replacing others")
@@ -114,6 +123,7 @@ func requestFromFlags(c *cobra.Command, f mutationFlags, action, id, title strin
 		{"project", f.project, &r.Patch.Project},
 		{"area", f.area, &r.Patch.Area},
 		{"heading", f.heading, &r.Patch.Heading},
+		{"completion-date", f.completionDate, &r.Patch.CompletionDate},
 	} {
 		if c.Flags().Changed(v.flag) {
 			if *v.target != nil {
@@ -122,6 +132,20 @@ func requestFromFlags(c *cobra.Command, f mutationFlags, action, id, title strin
 			value := v.value
 			*v.target = &value
 		}
+	}
+
+	if f.completed || f.canceled {
+		if f.completed && f.canceled {
+			return r, domain.E("conflicting_status", "Choose either --completed or --canceled.", 2)
+		}
+		if r.Patch.Status != nil {
+			return r, domain.E("duplicate_field", "A field cannot be supplied in both JSON and flags: status", 2)
+		}
+		status := "completed"
+		if f.canceled {
+			status = "canceled"
+		}
+		r.Patch.Status = &status
 	}
 
 	if f.notesFile != "" {
@@ -251,10 +275,14 @@ func (a *app) addMutations(root *cobra.Command) {
 					return err
 				}
 
+				patch := domain.Patch{Status: &status}
+				if c.Flags().Changed("completion-date") {
+					patch.CompletionDate = &f.completionDate
+				}
 				o, err := s.Mutate(c.Context(), domain.Request{
 					Action:              "set_status",
 					ID:                  args[0],
-					Patch:               domain.Patch{Status: &status},
+					Patch:               patch,
 					OperationKey:        f.key,
 					ExpectedFingerprint: f.fingerprint,
 					DryRun:              f.dryRun,
@@ -265,6 +293,9 @@ func (a *app) addMutations(root *cobra.Command) {
 		c.Flags().StringVar(&f.key, "operation-key", "", "Protect this request against replay")
 		c.Flags().StringVar(&f.fingerprint, "expected-fingerprint", "", "Reject a changed snapshot")
 		c.Flags().BoolVar(&f.dryRun, "dry-run", false, "Validate without dispatch")
+		if verb != "reopen" {
+			c.Flags().StringVar(&f.completionDate, "completion-date", "", completionDateHelp)
+		}
 		root.AddCommand(c)
 	}
 

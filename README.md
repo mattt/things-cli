@@ -103,6 +103,8 @@ things update TASK_ID --deadline 2026-10-16 --add-tag work
 things update TASK_ID --clear-deadline
 things complete TASK_ID --operation-key review-landing-page-done
 things cancel TASK_ID
+things complete TASK_ID --completion-date 2026-10-14
+things add "Send invoice" --completed --completion-date 2026-10-14T16:30
 things reopen TASK_ID
 things project add "Website refresh" --file examples/project.json --dry-run
 things project update PROJECT_ID --notes "Updated project notes."
@@ -117,6 +119,16 @@ Dates and times are local.
 For reminder changes on an Evening task dated outside today,
 change its schedule explicitly or edit the reminder in Things.
 If midnight passes before Evening dispatch, the write fails without dispatch.
+
+`--completion-date` sets a past completion date on `complete`, `cancel`,
+`add`, and `update`, and on the project commands.
+It accepts `YYYY-MM-DD` (local midnight), a local `YYYY-MM-DDTHH:MM[:SS]` time,
+an RFC 3339 date-time with `Z` or an offset, `today`, and `yesterday`.
+The item must be completed or canceled after the write,
+so `add` requires `--completed` or `--canceled`.
+Future dates, open items, and repeating templates are rejected,
+because Things ignores the date in those cases.
+JSON input uses `completion_date`; it cannot be cleared.
 
 `--tag` replaces tags; `--add-tag` adds them.
 Tags must exist with unique titles, even when selected by ID.
@@ -135,7 +147,8 @@ New project items can be `todo` or `heading`;
 headings apply to following tasks.
 Creating or editing headings in existing projects, creating areas or tags,
 and changing recurrence rules are unsupported.
-Recurring templates reject schedule, deadline, status, and reminder changes.
+Recurring templates reject schedule, deadline, status, reminder,
+and completion date changes.
 Projects with incomplete children or active headings cannot be closed.
 
 ## Operation outcomes

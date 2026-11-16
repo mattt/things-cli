@@ -49,6 +49,7 @@ type updateInput struct {
 type statusInput struct {
 	ID                  string `json:"id"`
 	Status              string `json:"status"`
+	CompletionDate      string `json:"completion_date,omitempty"`
 	OperationKey        string `json:"operation_key,omitempty"`
 	ExpectedFingerprint string `json:"expected_fingerprint,omitempty"`
 	DryRun              bool   `json:"dry_run,omitempty"`
@@ -206,12 +207,16 @@ func New(s *service.Service, readOnly bool) *sdk.Server {
 		},
 	)
 	addWrite(server,
-		tool("set_status", "Set incomplete, completed, or canceled status with read-back verification.", false, true, true),
+		tool("set_status", "Set incomplete, completed, or canceled status with read-back verification. A completion_date backdates a completed or canceled status.", false, true, true),
 		func(ctx context.Context, in statusInput) (domain.Operation, error) {
+			patch := domain.Patch{Status: &in.Status}
+			if in.CompletionDate != "" {
+				patch.CompletionDate = &in.CompletionDate
+			}
 			return s.Mutate(ctx, domain.Request{
 				Action:              "set_status",
 				ID:                  in.ID,
-				Patch:               domain.Patch{Status: &in.Status},
+				Patch:               patch,
 				OperationKey:        in.OperationKey,
 				ExpectedFingerprint: in.ExpectedFingerprint,
 				DryRun:              in.DryRun,
