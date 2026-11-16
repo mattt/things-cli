@@ -31,12 +31,9 @@ func TestCLIJSONAndExitCodes(t *testing.T) {
 		{[]string{"list", "bad", "--json"}, 2, ""},
 		{[]string{"list", "inbox", "--limit", "0", "--json"}, 2, ""},
 		{[]string{"version", "--json"}, 0, ""},
-		{[]string{"complete", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0, ""},
-		{[]string{"cancel", "task", "--completion-date", "2026-01-15T09:30:00Z", "--dry-run", "--json"}, 0, ""},
 		{[]string{"complete", "task", "--completion-date", "2999-01-01", "--dry-run", "--json"}, 2, "future_completion_date"},
 		{[]string{"complete", "task", "--completion-date", "soon", "--dry-run", "--json"}, 2, "invalid_completion_date"},
 		{[]string{"update", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2, "completion_date_requires_closed_status"},
-		{[]string{"add", "Done", "--completed", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0, ""},
 		{[]string{"add", "Done", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2, "completion_date_requires_closed_status"},
 		{[]string{"add", "Done", "--completed", "--canceled", "--dry-run", "--json"}, 2, "conflicting_status"},
 	}
@@ -55,6 +52,40 @@ func TestCLIJSONAndExitCodes(t *testing.T) {
 		}
 		if c.code != "" && (r.Error == nil || r.Error.Code != c.code) {
 			t.Fatalf("%v: got %s, want error %s", c.args, out.String(), c.code)
+		}
+	}
+}
+
+func TestCompletionDateDryRuns(t *testing.T) {
+	db, path := testutil.Database(t)
+	testutil.Exec(t, db, `INSERT INTO TMTask(uuid,title) VALUES ('task','A')`)
+
+	cases := []struct {
+		args         []string
+		status, date string
+	}{
+		{[]string{"complete", "task", "--completion-date", "2026-01-15"}, "completed", time.Date(2026, 1, 15, 0, 0, 0, 0, time.Local).Format(time.RFC3339)},
+		{[]string{"cancel", "task", "--completion-date", "2026-01-15T09:30:00Z"}, "canceled", time.Date(2026, 1, 15, 9, 30, 0, 0, time.UTC).In(time.Local).Format(time.RFC3339)},
+		{[]string{"add", "Done", "--completed", "--completion-date", "2026-01-15T08:15"}, "completed", time.Date(2026, 1, 15, 8, 15, 0, 0, time.Local).Format(time.RFC3339)},
+		{[]string{"add", "Done", "--canceled", "--completion-date", "2026-01-15T08:15:30+02:00"}, "canceled", time.Date(2026, 1, 15, 6, 15, 30, 0, time.UTC).In(time.Local).Format(time.RFC3339)},
+	}
+	for _, c := range cases {
+		args := append([]string{"--database", path, "--config-dir", t.TempDir()}, c.args...)
+		args = append(args, "--dry-run", "--json")
+		var out, stderr bytes.Buffer
+		if exit := Run(context.Background(), args, &out, &stderr); exit != 0 {
+			t.Fatalf("%v: exit %d; %s %s", c.args, exit, out.String(), stderr.String())
+		}
+
+		var r struct {
+			Data domain.Operation `json:"data"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+			t.Fatal(err)
+		}
+		p := r.Data.Request.Patch
+		if p.Status == nil || *p.Status != c.status || p.CompletionDate == nil || *p.CompletionDate != c.date {
+			t.Fatalf("%v: got %s", c.args, out.String())
 		}
 	}
 }
