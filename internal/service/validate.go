@@ -34,8 +34,8 @@ func (s *Service) prepare(ctx context.Context, r domain.Request) (domain.Request
 	}
 
 	if r.Action == "set_status" {
-		if r.Patch.Status == nil || domain.Hash(r.Patch) != domain.Hash(domain.Patch{Status: r.Patch.Status}) {
-			return r, snap, nil, domain.E("invalid_status_patch", "set_status accepts only a status field.", 2)
+		if r.Patch.Status == nil || domain.Hash(r.Patch) != domain.Hash(domain.Patch{Status: r.Patch.Status, CompletionDate: r.Patch.CompletionDate}) {
+			return r, snap, nil, domain.E("invalid_status_patch", "set_status accepts only status and completion_date fields.", 2)
 		}
 		i, err := resolve(snap.Items, r.ID, "", false)
 		if err != nil {
@@ -64,7 +64,7 @@ func (s *Service) prepare(ctx context.Context, r domain.Request) (domain.Request
 		if i.Trashed || i.ContextTrashed {
 			return r, snap, nil, domain.E("trashed_item", "Restore this item in Things before editing it.", 5)
 		}
-		if i.Recurrence == "template" && (r.Patch.When != nil || r.Patch.Deadline != nil || r.Patch.Status != nil || r.Patch.Reminder != nil) {
+		if i.Recurrence == "template" && (r.Patch.When != nil || r.Patch.Deadline != nil || r.Patch.Status != nil || r.Patch.Reminder != nil || r.Patch.CompletionDate != nil) {
 			return r, snap, nil, domain.E("recurrence_edit_unsupported", "The URL scheme cannot change these fields on recurring templates.", 5)
 		}
 		if r.ExpectedFingerprint != "" && r.ExpectedFingerprint != i.Fingerprint {
@@ -180,6 +180,25 @@ func (s *Service) validatePatch(p *domain.Patch, action string, before *domain.I
 
 	if p.Status != nil && *p.Status != "incomplete" && *p.Status != "completed" && *p.Status != "canceled" {
 		return domain.E("invalid_status", "Status must be incomplete, completed, or canceled.", 2)
+	}
+	if p.CompletionDate != nil {
+		if *p.CompletionDate == "" {
+			return domain.E("completion_date_clear_unsupported", "The URL scheme cannot clear a completion date.", 5)
+		}
+		v, err := normalizeCompletionDate(*p.CompletionDate, s.now())
+		if err != nil {
+			return err
+		}
+		status := ""
+		if p.Status != nil {
+			status = *p.Status
+		} else if before != nil {
+			status = before.Status
+		}
+		if status != "completed" && status != "canceled" {
+			return domain.E("completion_date_requires_closed_status", "A completion date requires a completed or canceled item. Things ignores it on open items.", 2)
+		}
+		p.CompletionDate = &v
 	}
 	if p.Project != nil && p.Area != nil {
 		return domain.E("conflicting_destination", "Choose either a project or an area.", 2)
@@ -398,6 +417,44 @@ func normalizeDate(v string, today time.Time, keywords bool) (string, error) {
 		return "", domain.E("invalid_date", "Use an ISO calendar date or a supported Things scheduling value.", 2)
 	}
 	return v, nil
+}
+
+// normalizeCompletionDate accepts an ISO calendar date, a local date-time
+// without a zone, an RFC 3339 date-time, today, or yesterday. Dates without a
+// time mean local midnight. The result is RFC 3339 in local time with whole
+// seconds; Things ignores completion dates in the future, so they are rejected.
+func normalizeCompletionDate(v string, now time.Time) (string, error) {
+	local := now.In(time.Local)
+	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.Local)
+
+	var t time.Time
+	switch v {
+	case "today":
+		t = midnight
+	case "yesterday":
+		t = midnight.AddDate(0, 0, -1)
+	default:
+		parsed := false
+		for _, layout := range []string{"2006-01-02", "2006-01-02T15:04", "2006-01-02T15:04:05"} {
+			if x, err := time.ParseInLocation(layout, v, time.Local); err == nil {
+				t, parsed = x, true
+				break
+			}
+		}
+		if !parsed {
+			x, err := time.Parse(time.RFC3339Nano, v)
+			if err != nil {
+				return "", domain.E("invalid_completion_date", "Use YYYY-MM-DD, a local YYYY-MM-DDTHH:MM[:SS] time, an RFC 3339 date-time, today, or yesterday for a completion date.", 2)
+			}
+			t = x
+		}
+	}
+
+	t = t.Truncate(time.Second)
+	if t.After(now) {
+		return "", domain.E("future_completion_date", "A completion date cannot be in the future. Things ignores future completion dates.", 2)
+	}
+	return t.In(time.Local).Format(time.RFC3339), nil
 }
 
 // tagTitles converts verified tag identities only at the URL encoding boundary.

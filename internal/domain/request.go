@@ -21,6 +21,8 @@ type Patch struct {
 	AddTags   []string         `json:"add_tags,omitempty"`
 	Checklist *[]ChecklistItem `json:"checklist,omitempty"`
 	Status    *string          `json:"status,omitempty"`
+	// CompletionDate is an ISO 8601 date or date-time, normalized to RFC 3339.
+	CompletionDate *string `json:"completion_date,omitempty"`
 }
 
 func (p *Patch) UnmarshalJSON(b []byte) error {
@@ -59,6 +61,8 @@ func (p *Patch) UnmarshalJSON(b []byte) error {
 			a.Heading = &empty
 		case "status":
 			a.Status = &empty
+		case "completion_date":
+			a.CompletionDate = &empty
 		case "tags":
 			v := []string{}
 			a.Tags = &v

@@ -81,6 +81,12 @@
                         "array"
                       ]
                     },
+                    "completion_date": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "deadline": {
                       "type": [
                         "null",
@@ -204,6 +210,12 @@
                 "type": [
                   "null",
                   "array"
+                ]
+              },
+              "completion_date": {
+                "type": [
+                  "null",
+                  "string"
                 ]
               },
               "deadline": {

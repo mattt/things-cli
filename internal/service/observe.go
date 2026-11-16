@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mattt/things-cli/internal/domain"
 	"github.com/mattt/things-cli/internal/readstore"
@@ -94,6 +95,17 @@ func matchPatch(i domain.Item, p domain.Patch, schedulingDate string) bool {
 		{p.Status, i.Status},
 	} {
 		if f.want != nil && *f.want != f.have {
+			return false
+		}
+	}
+
+	if p.CompletionDate != nil {
+		want, err := time.Parse(time.RFC3339, *p.CompletionDate)
+		if err != nil || i.StoppedAt == nil {
+			return false
+		}
+		// Things stores the date as floating-point seconds.
+		if d := i.StoppedAt.Sub(want); d <= -time.Second || d >= time.Second {
 			return false
 		}
 	}
