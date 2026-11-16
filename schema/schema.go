@@ -66,6 +66,10 @@ func visit(v any) {
 							delete(properties, "id")
 						}
 					}
+				case "completion_date":
+					f["type"] = "string"
+					f["minLength"] = 1
+					f["description"] = domain.CompletionDateDescription
 				case "operation_key":
 					f["maxLength"] = 256
 				}

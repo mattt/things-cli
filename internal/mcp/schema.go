@@ -72,7 +72,7 @@ func annotate(s *jsonschema.Schema) {
 		case "tags":
 			p.Description = "Replace existing tags by uniquely resolved name or ID. Null clears tags."
 		case "completion_date":
-			p.Description = "Past completion date for a completed or canceled item: YYYY-MM-DD (local midnight), local YYYY-MM-DDTHH:MM[:SS], RFC 3339, today, or yesterday. Cannot be cleared."
+			p.Description = domain.CompletionDateDescription
 		case "add_tags":
 			p.Description = "Add existing tags without replacing unrelated tags."
 		case "operation_key":
