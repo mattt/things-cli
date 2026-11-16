@@ -17,7 +17,7 @@ type mutationFlags struct {
 	completed, canceled                                                                               bool
 }
 
-const completionDateHelp = "Set the completion date of a completed or canceled item: YYYY-MM-DD (local midnight), a local YYYY-MM-DDTHH:MM[:SS] time, an RFC 3339 date-time, today, or yesterday"
+const completionDateHelp = "Set the completion date of a completed or canceled item: YYYY-MM-DD, today, or yesterday (start of the local day), a local YYYY-MM-DDTHH:MM[:SS] time, or an RFC 3339 date-time"
 
 func bindMutation(c *cobra.Command, f *mutationFlags, update, project bool) {
 	if update {

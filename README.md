@@ -122,9 +122,12 @@ If midnight passes before Evening dispatch, the write fails without dispatch.
 
 `--completion-date` sets a past completion date on `complete`, `cancel`,
 `add`, and `update`, and on the project commands.
-It accepts `YYYY-MM-DD` (local midnight), a local `YYYY-MM-DDTHH:MM[:SS]` time,
-an RFC 3339 date-time with `Z` or an offset, `today`, and `yesterday`.
-A local time that a daylight saving change skips is rejected;
+It accepts `YYYY-MM-DD`, `today`, `yesterday`,
+a local `YYYY-MM-DDTHH:MM[:SS]` time,
+and an RFC 3339 date-time with `Z` or an offset.
+A date without a time means the start of that local day:
+00:00, or the first valid time when a daylight saving change skips midnight.
+A local time that a daylight saving change skips is otherwise rejected;
 a repeated local time means its first occurrence.
 The item must be completed or canceled after the write,
 so `add` requires `--completed` or `--canceled`.

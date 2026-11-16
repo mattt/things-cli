@@ -77,7 +77,7 @@ func (p *Patch) UnmarshalJSON(b []byte) error {
 }
 
 // CompletionDateDescription documents completion_date for published schemas.
-const CompletionDateDescription = "Past completion date for an item that is completed or canceled after the write: YYYY-MM-DD (start of the local day), local YYYY-MM-DDTHH:MM[:SS], an RFC 3339 date-time with Z or an offset, today, or yesterday. A local time skipped by daylight saving time is invalid; a repeated local time means its first occurrence. Future dates are rejected. It cannot be cleared, so null and empty values are rejected."
+const CompletionDateDescription = "Past completion date for an item that is completed or canceled after the write: YYYY-MM-DD, today, or yesterday (start of the local day: 00:00, or the first valid time when daylight saving time skips midnight), local YYYY-MM-DDTHH:MM[:SS], or an RFC 3339 date-time with Z or an offset. Other local times skipped by daylight saving time are invalid; a repeated local time means its first occurrence. Future dates are rejected. It cannot be cleared, so null and empty values are rejected."
 
 type ProjectChild struct {
 	Kind  string `json:"kind"`

@@ -80,6 +80,62 @@ func TestNormalizeCompletionDateDaylightSaving(t *testing.T) {
 	}
 }
 
+func TestNormalizeCompletionDateStartOfDay(t *testing.T) {
+	zone := func(name string) *time.Location {
+		loc, err := time.LoadLocation(name)
+		if err != nil {
+			t.Skip("time zone data unavailable:", err)
+		}
+		return loc
+	}
+	// Santiago skips 2026-09-06 00:00-00:59 (-04 to -03).
+	santiago := zone("America/Santiago")
+	// Havana repeats 2025-11-02 00:00-00:59 (CDT -04, then CST -05).
+	havana := zone("America/Havana")
+
+	for _, c := range []struct {
+		name string
+		now  time.Time
+		in   string
+		want string
+	}{
+		{"skipped date", time.Date(2026, 9, 8, 12, 0, 0, 0, santiago), "2026-09-06", "2026-09-06T01:00:00-03:00"},
+		{"skipped today", time.Date(2026, 9, 6, 12, 0, 0, 0, santiago), "today", "2026-09-06T01:00:00-03:00"},
+		{"skipped yesterday", time.Date(2026, 9, 7, 12, 0, 0, 0, santiago), "yesterday", "2026-09-06T01:00:00-03:00"},
+		{"repeated date", time.Date(2025, 11, 5, 12, 0, 0, 0, havana), "2025-11-02", "2025-11-02T00:00:00-04:00"},
+		{"repeated today", time.Date(2025, 11, 2, 12, 0, 0, 0, havana), "today", "2025-11-02T00:00:00-04:00"},
+		{"repeated yesterday", time.Date(2025, 11, 3, 12, 0, 0, 0, havana), "yesterday", "2025-11-02T00:00:00-04:00"},
+		{"yesterday across months", time.Date(2026, 10, 1, 12, 0, 0, 0, santiago), "yesterday", "2026-09-30T00:00:00-03:00"},
+	} {
+		got, err := normalizeCompletionDate(c.in, c.now)
+		if err != nil || got != c.want {
+			t.Errorf("%s: got %q, %v; want %s", c.name, got, err, c.want)
+		}
+	}
+}
+
+func TestFirstOccurrence(t *testing.T) {
+	for _, c := range []struct {
+		zone          string
+		later, first  time.Time
+		layout, label string
+	}{
+		{"America/Los_Angeles", time.Date(2026, 11, 1, 9, 30, 0, 0, time.UTC), time.Date(2026, 11, 1, 8, 30, 0, 0, time.UTC), "2006-01-02T15:04", "01:30 PST"},
+		{"America/Havana", time.Date(2025, 11, 2, 5, 0, 0, 0, time.UTC), time.Date(2025, 11, 2, 4, 0, 0, 0, time.UTC), time.DateTime, "00:00 CST"},
+	} {
+		loc, err := time.LoadLocation(c.zone)
+		if err != nil {
+			t.Skip("time zone data unavailable:", err)
+		}
+		if got := firstOccurrence(c.later.In(loc), c.layout); !got.Equal(c.first) {
+			t.Errorf("%s %s: got %s, want %s", c.zone, c.label, got.UTC(), c.first)
+		}
+		if got := firstOccurrence(c.first.In(loc), c.layout); !got.Equal(c.first) {
+			t.Errorf("%s first occurrence moved to %s", c.zone, got.UTC())
+		}
+	}
+}
+
 func TestNormalizeCompletionDateSubsecondBoundary(t *testing.T) {
 	now := time.Date(2026, 10, 8, 12, 0, 0, 100_000_000, time.UTC)
 	got, err := normalizeCompletionDate("2026-10-08T12:00:00.1Z", now)

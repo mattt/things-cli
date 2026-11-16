@@ -421,25 +421,30 @@ func normalizeDate(v string, today time.Time, keywords bool) (string, error) {
 
 // normalizeCompletionDate accepts an ISO calendar date, a local date-time
 // without a zone, an RFC 3339 date-time, today, or yesterday, in the location
-// of now. A date without a time means the start of that local day. A local time
-// that a daylight saving change skips is rejected; a repeated local time means
-// its first occurrence. The result is RFC 3339 with whole seconds. Things
-// ignores completion dates in the future, so they are rejected.
+// of now. A date without a time, including today and yesterday, means the
+// start of that local day: 00:00, its first occurrence if a daylight saving
+// change repeats it, or the first valid time if the change skips it. Other
+// local times skipped by daylight saving time are rejected, and repeated local
+// times mean their first occurrence. The result is RFC 3339 with whole seconds.
+// Things ignores completion dates in the future, so they are rejected.
 func normalizeCompletionDate(v string, now time.Time) (string, error) {
 	loc := now.Location()
 	invalid := domain.E("invalid_completion_date", "Use YYYY-MM-DD, a local YYYY-MM-DDTHH:MM[:SS] time, an RFC 3339 date-time, today, or yesterday for a completion date. Local times skipped by daylight saving time are invalid.", 2)
 
 	var t time.Time
 	switch v {
-	case "today", "yesterday":
-		days := 0
-		if v == "yesterday" {
-			days = -1
-		}
-		t = time.Date(now.Year(), now.Month(), now.Day()+days, 0, 0, 0, 0, loc)
+	case "today":
+		t = startOfDay(now.Year(), now.Month(), now.Day(), loc)
+	case "yesterday":
+		t = startOfDay(now.Year(), now.Month(), now.Day()-1, loc)
 	default:
+		if d, err := time.Parse("2006-01-02", v); err == nil {
+			t = startOfDay(d.Year(), d.Month(), d.Day(), loc)
+			break
+		}
+
 		parsed := false
-		for _, layout := range []string{"2006-01-02", "2006-01-02T15:04", "2006-01-02T15:04:05"} {
+		for _, layout := range []string{"2006-01-02T15:04", "2006-01-02T15:04:05"} {
 			x, err := time.ParseInLocation(layout, v, loc)
 			if err != nil {
 				continue
@@ -464,6 +469,21 @@ func normalizeCompletionDate(v string, now time.Time) (string, error) {
 		return "", domain.E("future_completion_date", "A completion date cannot be in the future. Things ignores future completion dates.", 2)
 	}
 	return t.Truncate(time.Second).In(loc).Format(time.RFC3339), nil
+}
+
+// startOfDay returns the first instant of a local calendar day. The day is
+// normalized as time.Date normalizes it, so day 0 is the previous month's last.
+func startOfDay(year int, month time.Month, day int, loc *time.Location) time.Time {
+	t := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	date := t.Format("2006-01-02")
+
+	start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+	if start.Format("2006-01-02") != date {
+		// A daylight saving change skips midnight, and Date resolved it to the
+		// previous day. The day starts when that zone period ends.
+		_, start = start.ZoneBounds()
+	}
+	return firstOccurrence(start, time.DateTime)
 }
 
 // firstOccurrence returns the earlier instant when a daylight saving change
