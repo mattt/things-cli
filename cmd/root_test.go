@@ -21,23 +21,24 @@ func TestCLIJSONAndExitCodes(t *testing.T) {
 	cases := []struct {
 		args []string
 		exit int
+		code string
 	}{
-		{[]string{"list", "inbox", "--json"}, 0},
-		{[]string{"get", "task", "--json"}, 0},
-		{[]string{"get", "task-", "--json"}, 0},
-		{[]string{"get", "missing", "--json"}, 3},
-		{[]string{"update", "task", "--notes", "x", "--dry-run", "--json"}, 0},
-		{[]string{"list", "bad", "--json"}, 2},
-		{[]string{"list", "inbox", "--limit", "0", "--json"}, 2},
-		{[]string{"version", "--json"}, 0},
-		{[]string{"complete", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0},
-		{[]string{"cancel", "task", "--completion-date", "2026-01-15T09:30:00Z", "--dry-run", "--json"}, 0},
-		{[]string{"complete", "task", "--completion-date", "2999-01-01", "--dry-run", "--json"}, 2},
-		{[]string{"complete", "task", "--completion-date", "soon", "--dry-run", "--json"}, 2},
-		{[]string{"update", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2},
-		{[]string{"add", "Done", "--completed", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0},
-		{[]string{"add", "Done", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2},
-		{[]string{"add", "Done", "--completed", "--canceled", "--dry-run", "--json"}, 2},
+		{[]string{"list", "inbox", "--json"}, 0, ""},
+		{[]string{"get", "task", "--json"}, 0, ""},
+		{[]string{"get", "task-", "--json"}, 0, ""},
+		{[]string{"get", "missing", "--json"}, 3, ""},
+		{[]string{"update", "task", "--notes", "x", "--dry-run", "--json"}, 0, ""},
+		{[]string{"list", "bad", "--json"}, 2, ""},
+		{[]string{"list", "inbox", "--limit", "0", "--json"}, 2, ""},
+		{[]string{"version", "--json"}, 0, ""},
+		{[]string{"complete", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0, ""},
+		{[]string{"cancel", "task", "--completion-date", "2026-01-15T09:30:00Z", "--dry-run", "--json"}, 0, ""},
+		{[]string{"complete", "task", "--completion-date", "2999-01-01", "--dry-run", "--json"}, 2, "future_completion_date"},
+		{[]string{"complete", "task", "--completion-date", "soon", "--dry-run", "--json"}, 2, "invalid_completion_date"},
+		{[]string{"update", "task", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2, "completion_date_requires_closed_status"},
+		{[]string{"add", "Done", "--completed", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 0, ""},
+		{[]string{"add", "Done", "--completion-date", "2026-01-15", "--dry-run", "--json"}, 2, "completion_date_requires_closed_status"},
+		{[]string{"add", "Done", "--completed", "--canceled", "--dry-run", "--json"}, 2, "conflicting_status"},
 	}
 
 	for _, c := range cases {
@@ -51,6 +52,9 @@ func TestCLIJSONAndExitCodes(t *testing.T) {
 		var r domain.Response
 		if err := json.Unmarshal(out.Bytes(), &r); err != nil || r.SchemaVersion != 1 {
 			t.Fatalf("invalid JSON %s: %v", out.String(), err)
+		}
+		if c.code != "" && (r.Error == nil || r.Error.Code != c.code) {
+			t.Fatalf("%v: got %s, want error %s", c.args, out.String(), c.code)
 		}
 	}
 }
