@@ -25,7 +25,7 @@ make
 make install PREFIX="$HOME/.local"
 ```
 
-Database versions 22 through 29 are supported.
+Database versions 22 through 30 are supported.
 Unsupported versions or missing required fields cause capability errors.
 Use `--database /path/to/main.sqlite` to select a library for reads.
 Set `THINGS_DATABASE` to the same path when you cannot change the arguments,

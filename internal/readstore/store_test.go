@@ -152,7 +152,7 @@ func TestWriteDatabaseSelectionAndIdentity(t *testing.T) {
 }
 
 func TestOpenVersionRange(t *testing.T) {
-	for v, ok := range map[int]bool{21: false, 22: true, 29: true, 30: false} {
+	for v, ok := range map[int]bool{21: false, 22: true, 30: true, 31: false} {
 		db, path := testutil.Database(t)
 		testutil.Exec(t, db, "UPDATE Meta SET value=? WHERE key='databaseVersion'",
 			fmt.Sprintf(`<?xml version="1.0"?><plist><integer>%d</integer></plist>`, v))
