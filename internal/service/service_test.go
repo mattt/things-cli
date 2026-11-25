@@ -760,6 +760,53 @@ func TestReminderOnlyPreservesEveningDate(t *testing.T) {
 	}
 }
 
+func TestBatchDateChangeRevalidatesReminder(t *testing.T) {
+	const date = "2026-10-09"
+	for _, tc := range []struct {
+		name      string
+		current   string
+		requested *string
+		want      string
+	}{
+		{"inherit edited reminder", "09:00", nil, "09:00"},
+		{"inherit removed reminder", "", nil, ""},
+		{"set reminder", "09:00", str("12:00"), "12:00"},
+		{"remove reminder", "09:00", str(""), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			item := todo("task", "Task")
+			item.StartDate, item.Reminder = "2026-10-08", "08:00"
+			s, m := testService(t, item)
+			m.onRead = func(n int, items []domain.Item) {
+				if n == 2 { // The child reads the item again after batch validation.
+					items[0].Reminder = tc.current
+				}
+			}
+			s.Dispatcher = dispatchFunc(func(_ context.Context, raw string) error {
+				u, err := url.Parse(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantWhen := date
+				if tc.want != "" {
+					wantWhen += "@" + tc.want
+				}
+				if got := u.Query().Get("when"); got != wantWhen {
+					t.Fatalf("dispatched when = %q, want %q", got, wantWhen)
+				}
+				m.items[0].StartDate, m.items[0].Reminder = date, tc.want
+				return nil
+			})
+			o, err := s.Batch(context.Background(), domain.BatchRequest{Actions: []domain.Request{
+				{Action: "update", ID: item.ID, Patch: domain.Patch{When: str(date), Reminder: tc.requested}},
+			}})
+			if err != nil || o.Outcome != "confirmed" {
+				t.Fatal(o, err)
+			}
+		})
+	}
+}
+
 func TestBatchReminderRevalidatesEveningDate(t *testing.T) {
 	item := todo("evening-task", "Evening")
 	item.StartDate, item.Evening, item.Reminder = "2026-10-08", true, "17:00"
