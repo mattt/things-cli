@@ -177,9 +177,12 @@ func (s *Service) Batch(ctx context.Context, b domain.BatchRequest) (domain.Oper
 			child, err = s.persist(ctx, child)
 		} else {
 			input := child.Request
-			// Revalidate a reminder's inherited schedule at execution time.
-			if b.Actions[n].Patch.When == nil && b.Actions[n].Patch.Reminder != nil {
+			// Read omitted schedule and reminder values from the current item.
+			if b.Actions[n].Patch.When == nil {
 				input.Patch.When = nil
+			}
+			if b.Actions[n].Patch.Reminder == nil {
+				input.Patch.Reminder = nil
 			}
 			child, err = s.mutateLocked(ctx, input, child.InputHash, &child)
 			if err != nil {
